@@ -2,6 +2,17 @@
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@agentropolis/shared'],
+  webpack: (config) => {
+    config.resolve.fallback = { fs: false, net: false, tls: false }
+    config.externals.push(
+      'pino-pretty', 
+      'lokijs', 
+      'encoding',
+      '@coinbase/wallet-sdk',
+      '@gemini-wallet/core',
+    )
+    return config
+  },
 }
 
 module.exports = nextConfig
