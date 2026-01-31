@@ -1,10 +1,11 @@
 'use client'
 
 import { useAccount, useConnect, useDisconnect, useSwitchChain, Connector } from 'wagmi'
-import { baseSepolia } from 'wagmi/chains'
+import { baseSepolia } from 'viem/chains'
+import { UserIdentity } from './UserIdentity'
 
 export function ConnectButton() {
-  const { address, isConnected, chain } = useAccount()
+  const { isConnected, chain } = useAccount()
   const { connect, connectors, isPending } = useConnect()
   const { disconnect } = useDisconnect()
   const { switchChain } = useSwitchChain()
@@ -26,9 +27,7 @@ export function ConnectButton() {
             Switch to Base Sepolia
           </button>
         )}
-        <span className="text-sm text-gray-400">
-          {address?.slice(0, 6)}...{address?.slice(-4)}
-        </span>
+        <UserIdentity />
         <button
           onClick={() => disconnect()}
           className="px-4 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
