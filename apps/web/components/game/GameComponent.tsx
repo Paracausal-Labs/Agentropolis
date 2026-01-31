@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import Phaser from 'phaser'
+import { MainScene } from './scenes/MainScene'
 
 export default function GameComponent() {
   const gameRef = useRef<Phaser.Game | null>(null)
@@ -11,18 +12,15 @@ export default function GameComponent() {
 
     const config: Phaser.Types.Core.GameConfig = {
       type: Phaser.AUTO,
-      width: 800,
-      height: 600,
+      width: window.innerWidth,
+      height: window.innerHeight,
       parent: 'game-container',
-      scene: {
-        create: function () {
-          this.add.text(400, 300, 'Phaser Game Ready', {
-            fontSize: '32px',
-            color: '#ffffff',
-          })
-        },
+      scene: [MainScene],
+      backgroundColor: '#1a1a2e',
+      scale: {
+        mode: Phaser.Scale.RESIZE,
+        autoCenter: Phaser.Scale.CENTER_BOTH,
       },
-      backgroundColor: '#222222',
     }
 
     gameRef.current = new Phaser.Game(config)
