@@ -1,0 +1,6 @@
+{
+  "name": "@agentropolis/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Smart contracts for Agentropolis"
+}
