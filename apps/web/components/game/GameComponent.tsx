@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react'
 import Phaser from 'phaser'
 import { CityScene } from './scenes/CityScene'
+import { CouncilScene } from './scenes/CouncilScene'
 
 export default function GameComponent() {
   const gameRef = useRef<Phaser.Game | null>(null)
@@ -15,7 +16,7 @@ export default function GameComponent() {
       width: window.innerWidth,
       height: window.innerHeight,
       parent: 'game-container',
-      scene: [CityScene],
+      scene: [CityScene, CouncilScene],
       backgroundColor: '#1a1a2e',
       scale: {
         mode: Phaser.Scale.RESIZE,
@@ -24,6 +25,10 @@ export default function GameComponent() {
     }
 
     gameRef.current = new Phaser.Game(config)
+    
+    gameRef.current.events.on('openCouncil', () => {
+      gameRef.current?.scene.start('CouncilScene', { agents: [] })
+    })
 
     return () => {
       if (gameRef.current) {
