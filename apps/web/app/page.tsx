@@ -1,7 +1,16 @@
+'use client'
+
 import { ConnectButton } from '@/components/ConnectButton'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 export default function Home() {
+  const router = useRouter()
+
+  const handleTryAsGuest = () => {
+    router.push('/app?guest=true')
+  }
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-24 bg-gray-950 text-white">
       <h1 className="text-6xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
@@ -22,6 +31,12 @@ export default function Home() {
         >
           Launch App
         </Link>
+        <button
+          onClick={handleTryAsGuest}
+          className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-colors font-semibold"
+        >
+          Try as Guest (10 min)
+        </button>
         <Link 
           href="/docs" 
           className="px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors font-semibold"
