@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import Phaser from 'phaser'
-import { MainScene } from './scenes/MainScene'
+import { CityScene } from './scenes/CityScene'
 
 export default function GameComponent() {
   const gameRef = useRef<Phaser.Game | null>(null)
@@ -15,7 +15,7 @@ export default function GameComponent() {
       width: window.innerWidth,
       height: window.innerHeight,
       parent: 'game-container',
-      scene: [MainScene],
+      scene: [CityScene],
       backgroundColor: '#1a1a2e',
       scale: {
         mode: Phaser.Scale.RESIZE,

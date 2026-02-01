@@ -28,31 +28,7 @@ const FALLBACK_PROPOSAL: Omit<TradeProposal, 'id' | 'agentId'> = {
   riskLevel: 'medium',
 }
 
-const TRADE_PROPOSAL_SCHEMA = {
-  type: 'object',
-  properties: {
-    action: { type: 'string', enum: ['swap', 'rebalance', 'dca'] },
-    tokenIn: { type: 'string', enum: ['USDC', 'WETH'] },
-    tokenOut: { type: 'string', enum: ['USDC', 'WETH'] },
-    amountIn: { type: 'string' },
-    expectedAmountOut: { type: 'string' },
-    maxSlippage: { type: 'number', minimum: 1, maximum: 500 },
-    reasoning: { type: 'string' },
-    confidence: { type: 'number', minimum: 0, maximum: 100 },
-    riskLevel: { type: 'string', enum: ['low', 'medium', 'high'] },
-  },
-  required: [
-    'action',
-    'tokenIn',
-    'tokenOut',
-    'amountIn',
-    'expectedAmountOut',
-    'maxSlippage',
-    'reasoning',
-    'confidence',
-    'riskLevel',
-  ],
-} as const
+
 
 function buildPrompt(request: ProposalRequest): string {
   const { agentProfile, context } = request
