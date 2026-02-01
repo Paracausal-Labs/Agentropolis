@@ -60,9 +60,10 @@ test-results/
 playwright-report/
 playwright/.cache/
 
-# Sisyphus (internal)
-.sisyphus/evidence/
-.sisyphus/boulder.json
+# Sisyphus (internal planning - do not commit)
+.sisyphus/
+PLAN.md
+CONTEXT.md
 
 # Large files
 *.mp4
