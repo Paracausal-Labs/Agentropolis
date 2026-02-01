@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { WalletProvider } from '@/components/WalletProvider'
+import { ErrorToastProvider } from '@/components/ErrorToast'
 
 export const metadata: Metadata = {
   title: 'Agentropolis',
@@ -16,7 +17,9 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <WalletProvider>
-          {children}
+          <ErrorToastProvider>
+            {children}
+          </ErrorToastProvider>
         </WalletProvider>
       </body>
     </html>

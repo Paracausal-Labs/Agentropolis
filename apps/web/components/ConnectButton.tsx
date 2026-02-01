@@ -3,6 +3,7 @@
 import { useAccount, useConnect, useDisconnect, useSwitchChain, Connector } from 'wagmi'
 import { baseSepolia } from 'viem/chains'
 import { UserIdentity } from './UserIdentity'
+import { showToast } from './ErrorToast'
 
 export function ConnectButton() {
   const { isConnected, chain } = useAccount()
@@ -13,7 +14,18 @@ export function ConnectButton() {
   const isWrongChain = isConnected && chain?.id !== baseSepolia.id
   
   const handleConnect = (connector: Connector) => {
-    connect({ connector })
+    connect(
+      { connector },
+      {
+        onError: (err) => {
+          if (err.message.includes('rejected')) {
+            showToast('Connection cancelled by user', 'warning')
+          } else {
+            showToast('Failed to connect wallet', 'error')
+          }
+        },
+      }
+    )
   }
 
   if (isConnected) {

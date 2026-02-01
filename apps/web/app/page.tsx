@@ -1,6 +1,5 @@
 'use client'
 
-import { ConnectButton } from '@/components/ConnectButton'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
