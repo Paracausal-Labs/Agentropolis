@@ -29,6 +29,23 @@ const CITY_MAP = [
   [0, 0, 3, 3, 0, 0, 0, 0, 3, 3, 0, 0],
 ]
 
+interface DeployedAgent {
+  id: string
+  name: string
+  sprite: Phaser.GameObjects.Container
+  gridX: number
+  gridY: number
+}
+
+const AGENT_POSITIONS = [
+  { x: 3, y: 3 },
+  { x: 8, y: 3 },
+  { x: 3, y: 8 },
+  { x: 8, y: 8 },
+  { x: 2, y: 5 },
+  { x: 9, y: 5 },
+]
+
 export class CityScene extends Phaser.Scene {
   private isDragging = false
   private dragStartX = 0
@@ -36,6 +53,11 @@ export class CityScene extends Phaser.Scene {
   private cameraStartX = 0
   private cameraStartY = 0
   private councilBuilding: Phaser.GameObjects.Container | null = null
+  private tileContainer: Phaser.GameObjects.Container | null = null
+  private deployedAgents: DeployedAgent[] = []
+  private deployButton: Phaser.GameObjects.Container | null = null
+  private agentPanel: Phaser.GameObjects.Container | null = null
+  private isPanelOpen = false
 
   constructor() {
     super({ key: 'CityScene' })
@@ -47,8 +69,7 @@ export class CityScene extends Phaser.Scene {
     const centerX = this.cameras.main.width / 2
     const centerY = this.cameras.main.height / 2
 
-    // Create tile container
-    const tileContainer = this.add.container(centerX, centerY - 100)
+    this.tileContainer = this.add.container(centerX, centerY - 100)
 
     // Draw isometric tiles
     for (let y = 0; y < GRID_SIZE; y++) {
@@ -61,11 +82,11 @@ export class CityScene extends Phaser.Scene {
         const screenPos = this.gridToIso(x, y)
         const color = this.getTileColor(tileType)
         
-        this.drawIsometricTile(tileContainer, screenPos.x, screenPos.y, color)
+        this.drawIsometricTile(this.tileContainer!, screenPos.x, screenPos.y, color)
         
         // Add small building on building tiles
         if (tileType === 2) {
-          this.drawBuilding(tileContainer, screenPos.x, screenPos.y, 0x1e40af, 20)
+          this.drawBuilding(this.tileContainer!, screenPos.x, screenPos.y, 0x1e40af, 20)
         }
       }
     }
@@ -73,7 +94,7 @@ export class CityScene extends Phaser.Scene {
     // Draw council building (larger, golden, in center)
     const councilPos = this.gridToIso(5.5, 5.5)
     this.councilBuilding = this.createCouncilBuilding(councilPos.x, councilPos.y)
-    tileContainer.add(this.councilBuilding)
+    this.tileContainer!.add(this.councilBuilding)
 
     // Add title
     this.add.text(centerX, 30, 'AGENTROPOLIS', {
@@ -90,10 +111,11 @@ export class CityScene extends Phaser.Scene {
       fontFamily: 'Arial',
     }).setOrigin(0.5)
 
-    // Camera controls
     this.setupCameraControls()
+    this.createDeployButton()
+    this.createAgentPanel()
 
-    // Expose game to window for debugging
+    // Expose game to window
     if (typeof window !== 'undefined') {
       (window as any).game = this.game
     }
@@ -276,6 +298,224 @@ export class CityScene extends Phaser.Scene {
       this.game.events.emit('openCouncil')
     })
 
+    return container
+  }
+
+  private createDeployButton() {
+    const x = this.cameras.main.width - 120
+    const y = 60
+    
+    this.deployButton = this.add.container(x, y)
+    
+    const bg = this.add.graphics()
+    bg.fillStyle(0x22c55e, 1)
+    bg.fillRoundedRect(-60, -20, 120, 40, 8)
+    this.deployButton.add(bg)
+    
+    const text = this.add.text(0, 0, 'Deploy Agent', {
+      fontSize: '14px',
+      color: '#ffffff',
+      fontFamily: 'Arial',
+      fontStyle: 'bold',
+    }).setOrigin(0.5)
+    this.deployButton.add(text)
+    
+    this.deployButton.setInteractive(new Phaser.Geom.Rectangle(-60, -20, 120, 40), Phaser.Geom.Rectangle.Contains)
+    
+    this.deployButton.on('pointerover', () => {
+      bg.clear()
+      bg.fillStyle(0x16a34a, 1)
+      bg.fillRoundedRect(-60, -20, 120, 40, 8)
+      this.input.setDefaultCursor('pointer')
+    })
+    
+    this.deployButton.on('pointerout', () => {
+      bg.clear()
+      bg.fillStyle(0x22c55e, 1)
+      bg.fillRoundedRect(-60, -20, 120, 40, 8)
+      this.input.setDefaultCursor('default')
+    })
+    
+    this.deployButton.on('pointerdown', () => {
+      this.toggleAgentPanel()
+    })
+    
+    this.deployButton.setScrollFactor(0)
+  }
+
+  private createAgentPanel() {
+    const panelWidth = 250
+    const panelHeight = 300
+    const x = this.cameras.main.width - panelWidth / 2 - 20
+    const y = 200
+    
+    this.agentPanel = this.add.container(x, y)
+    this.agentPanel.setVisible(false)
+    this.agentPanel.setScrollFactor(0)
+    
+    const bg = this.add.graphics()
+    bg.fillStyle(0x1e293b, 0.95)
+    bg.fillRoundedRect(-panelWidth / 2, -20, panelWidth, panelHeight, 12)
+    bg.lineStyle(2, 0x475569)
+    bg.strokeRoundedRect(-panelWidth / 2, -20, panelWidth, panelHeight, 12)
+    this.agentPanel.add(bg)
+    
+    const title = this.add.text(0, 0, 'Select Agent', {
+      fontSize: '16px',
+      color: '#ffffff',
+      fontFamily: 'Arial',
+      fontStyle: 'bold',
+    }).setOrigin(0.5)
+    this.agentPanel.add(title)
+    
+    const loadingText = this.add.text(0, 100, 'Loading agents...', {
+      fontSize: '14px',
+      color: '#94a3b8',
+      fontFamily: 'Arial',
+    }).setOrigin(0.5)
+    this.agentPanel.add(loadingText)
+  }
+
+  private async toggleAgentPanel() {
+    if (this.isPanelOpen) {
+      this.agentPanel?.setVisible(false)
+      this.isPanelOpen = false
+      return
+    }
+    
+    this.agentPanel?.setVisible(true)
+    this.isPanelOpen = true
+    
+    try {
+      const res = await fetch('/api/agents/list?mock=true')
+      const agents = await res.json()
+      this.populateAgentPanel(agents)
+    } catch (err) {
+      console.error('[CityScene] Failed to fetch agents:', err)
+    }
+  }
+
+  private populateAgentPanel(agents: Array<{ agentId: number; name: string; strategy: string }>) {
+    if (!this.agentPanel) return
+    
+    while (this.agentPanel.list.length > 2) {
+      const child = this.agentPanel.list[this.agentPanel.list.length - 1]
+      if (child instanceof Phaser.GameObjects.GameObject) {
+        child.destroy()
+      }
+      this.agentPanel.list.pop()
+    }
+    
+    agents.slice(0, 5).forEach((agent, i) => {
+      const y = 50 + i * 50
+      
+      const itemBg = this.add.graphics()
+      itemBg.fillStyle(0x334155, 1)
+      itemBg.fillRoundedRect(-100, y - 18, 200, 40, 6)
+      this.agentPanel!.add(itemBg)
+      
+      const nameText = this.add.text(-90, y - 8, agent.name, {
+        fontSize: '13px',
+        color: '#ffffff',
+        fontFamily: 'Arial',
+      })
+      this.agentPanel!.add(nameText)
+      
+      const strategyText = this.add.text(-90, y + 8, agent.strategy, {
+        fontSize: '11px',
+        color: '#94a3b8',
+        fontFamily: 'Arial',
+      })
+      this.agentPanel!.add(strategyText)
+      
+      const deployBtn = this.add.text(70, y, 'Deploy', {
+        fontSize: '12px',
+        color: '#22c55e',
+        fontFamily: 'Arial',
+        fontStyle: 'bold',
+      }).setOrigin(0.5).setInteractive()
+      
+      deployBtn.on('pointerover', () => {
+        deployBtn.setColor('#4ade80')
+        this.input.setDefaultCursor('pointer')
+      })
+      
+      deployBtn.on('pointerout', () => {
+        deployBtn.setColor('#22c55e')
+        this.input.setDefaultCursor('default')
+      })
+      
+      deployBtn.on('pointerdown', () => {
+        this.deployAgent(agent)
+      })
+      
+      this.agentPanel!.add(deployBtn)
+    })
+  }
+
+  private deployAgent(agent: { agentId: number; name: string }) {
+    if (this.deployedAgents.length >= AGENT_POSITIONS.length) {
+      console.log('[CityScene] Max agents deployed')
+      return
+    }
+    
+    if (this.deployedAgents.some(a => a.id === String(agent.agentId))) {
+      console.log('[CityScene] Agent already deployed')
+      return
+    }
+    
+    const pos = AGENT_POSITIONS[this.deployedAgents.length]
+    const screenPos = this.gridToIso(pos.x, pos.y)
+    
+    const agentSprite = this.createAgentSprite(screenPos.x, screenPos.y, agent.name)
+    this.tileContainer!.add(agentSprite)
+    
+    this.deployedAgents.push({
+      id: String(agent.agentId),
+      name: agent.name,
+      sprite: agentSprite,
+      gridX: pos.x,
+      gridY: pos.y,
+    })
+    
+    console.log(`[CityScene] Deployed agent: ${agent.name}`)
+    this.game.events.emit('agentDeployed', agent)
+    
+    this.agentPanel?.setVisible(false)
+    this.isPanelOpen = false
+  }
+
+  private createAgentSprite(x: number, y: number, name: string): Phaser.GameObjects.Container {
+    const container = this.add.container(x, y - 10)
+    const graphics = this.add.graphics()
+    
+    graphics.fillStyle(0x1e293b, 1)
+    graphics.fillCircle(0, -20, 8)
+    
+    graphics.fillStyle(0x0f172a, 1)
+    graphics.beginPath()
+    graphics.moveTo(0, -12)
+    graphics.lineTo(10, 8)
+    graphics.lineTo(5, 8)
+    graphics.lineTo(5, 18)
+    graphics.lineTo(-5, 18)
+    graphics.lineTo(-5, 8)
+    graphics.lineTo(-10, 8)
+    graphics.closePath()
+    graphics.fillPath()
+    
+    graphics.lineStyle(1, 0x475569)
+    graphics.strokeCircle(0, -20, 8)
+    
+    container.add(graphics)
+    
+    const label = this.add.text(0, -35, name.substring(0, 10), {
+      fontSize: '10px',
+      color: '#94a3b8',
+      fontFamily: 'Arial',
+    }).setOrigin(0.5)
+    container.add(label)
+    
     return container
   }
 
