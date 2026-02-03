@@ -60,10 +60,11 @@ test-results/
 playwright-report/
 playwright/.cache/
 
-# Sisyphus (internal planning - do not commit)
+# Internal planning (do not commit)
 .sisyphus/
 PLAN.md
 CONTEXT.md
+context.md
 
 # Large files
 *.mp4
