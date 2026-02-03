@@ -47,6 +47,15 @@ const AGENT_POSITIONS = [
   { x: 9, y: 5 },
 ]
 
+const STORAGE_KEY = 'agentropolis-agents'
+
+interface StoredAgent {
+  id: string
+  name: string
+  gridX: number
+  gridY: number
+}
+
 export class CityScene extends Phaser.Scene {
   private isDragging = false
   private dragStartX = 0
@@ -62,6 +71,64 @@ export class CityScene extends Phaser.Scene {
 
   constructor() {
     super({ key: 'CityScene' })
+  }
+
+  private saveAgentsToStorage() {
+    if (typeof window === 'undefined') return
+    
+    const data: StoredAgent[] = this.deployedAgents.map(a => ({
+      id: a.id,
+      name: a.name,
+      gridX: a.gridX,
+      gridY: a.gridY,
+    }))
+    
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+      console.log('[CityScene] Saved', data.length, 'agents to storage')
+    } catch (err) {
+      console.error('[CityScene] Failed to save agents:', err)
+    }
+  }
+
+  private loadAgentsFromStorage() {
+    if (typeof window === 'undefined') return
+    
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY)
+      if (!stored) return
+      
+      const agents = JSON.parse(stored) as StoredAgent[]
+      console.log('[CityScene] Loading', agents.length, 'agents from storage')
+      
+      agents.forEach((agent, index) => {
+        if (index >= AGENT_POSITIONS.length) return
+        
+        const screenPos = this.gridToIso(agent.gridX, agent.gridY)
+        const sprite = this.createAgentSprite(screenPos.x, screenPos.y, agent.name)
+        this.tileContainer!.add(sprite)
+        
+        const deployedAgent: DeployedAgent = {
+          id: agent.id,
+          name: agent.name,
+          sprite,
+          gridX: agent.gridX,
+          gridY: agent.gridY,
+          isWalking: false,
+        }
+        
+        this.deployedAgents.push(deployedAgent)
+        this.time.delayedCall(1000 + index * 500, () => this.startAgentWalking(deployedAgent))
+      })
+    } catch (err) {
+      console.error('[CityScene] Failed to load agents:', err)
+    }
+  }
+
+  public clearStoredAgents() {
+    if (typeof window === 'undefined') return
+    localStorage.removeItem(STORAGE_KEY)
+    console.log('[CityScene] Cleared stored agents')
   }
 
   preload() {}
@@ -115,8 +182,8 @@ export class CityScene extends Phaser.Scene {
     this.setupCameraControls()
     this.createDeployButton()
     this.createAgentPanel()
+    this.loadAgentsFromStorage()
 
-    // Expose game to window
     if (typeof window !== 'undefined') {
       (window as any).game = this.game
     }
@@ -503,6 +570,7 @@ export class CityScene extends Phaser.Scene {
     }
     
     this.deployedAgents.push(deployedAgent)
+    this.saveAgentsToStorage()
     
     console.log(`[CityScene] Deployed agent: ${agent.name}`)
     this.game.events.emit('agentDeployed', agent)
