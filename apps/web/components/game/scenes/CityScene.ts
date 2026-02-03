@@ -362,8 +362,12 @@ export class CityScene extends Phaser.Scene {
     container.on('pointerdown', () => {
       console.log('[CityScene] Council building clicked - opening Council Room')
       // Emit event for React to handle scene transition
-      this.events.emit('openCouncil')
-      this.game.events.emit('openCouncil')
+      const agents = this.deployedAgents.map((agent) => ({
+        id: agent.id,
+        name: agent.name,
+      }))
+      this.events.emit('openCouncil', agents)
+      this.game.events.emit('openCouncil', agents)
     })
 
     return container
@@ -455,7 +459,7 @@ export class CityScene extends Phaser.Scene {
     this.isPanelOpen = true
     
     try {
-      const res = await fetch('/api/agents/list?mock=true')
+      const res = await fetch('/api/agents/list')
       const agents = await res.json()
       this.populateAgentPanel(agents)
     } catch (err) {

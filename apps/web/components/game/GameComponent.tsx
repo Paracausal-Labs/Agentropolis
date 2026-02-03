@@ -67,8 +67,8 @@ export default function GameComponent() {
 
     gameRef.current = new Phaser.Game(config)
     
-    gameRef.current.events.on('openCouncil', () => {
-      gameRef.current?.scene.start('CouncilScene', { agents: [] })
+    gameRef.current.events.on('openCouncil', (agents?: Array<{ id: string; name: string }>) => {
+      gameRef.current?.scene.start('CouncilScene', { agents: agents ?? [] })
     })
 
     return () => {
