@@ -13,7 +13,7 @@ export class DCAStrategy implements AgentStrategy {
 
   async generateProposal(request: StrategyProposalRequest): Promise<TradeProposal> {
     const { agentId, agentProfile, context } = request
-    const { balance = '1000', preferredTokens = ['USDC', 'WETH'], riskLevel = 'low' } = context
+    const { balance = '1000', preferredTokens = ['USDC', 'WETH'], riskLevel: _riskLevel = 'low' } = context
 
     // Parse balance as number for calculations
     const balanceNum = parseFloat(balance) || 1000

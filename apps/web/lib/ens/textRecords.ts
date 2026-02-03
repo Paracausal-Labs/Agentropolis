@@ -4,7 +4,7 @@ import { useReadContract } from 'wagmi'
 import { mainnet } from 'viem/chains'
 import { normalize, namehash } from 'viem/ens'
 import { useMemo } from 'react'
-import { getEnsResolver, type WalletClient, type Address } from 'viem'
+import type { WalletClient, Address } from 'viem'
 
 /**
  * Agent configuration stored in ENS text records
@@ -81,12 +81,7 @@ function validateStrategy(strategy: string | null): AgentConfig['strategy'] {
  */
 export async function readAgentConfig(ensName: string): Promise<AgentConfig> {
   try {
-    // Normalize ENS name
-    const normalized = normalize(ensName)
-
-    // In a real implementation, we would fetch from ENS resolver
-    // For now, return defaults as we need wagmi hooks for client-side
-    // This function is a placeholder for server-side usage
+    normalize(ensName)
     return DEFAULT_AGENT_CONFIG
   } catch (error) {
     console.warn(`Failed to read ENS config for ${ensName}:`, error)
@@ -111,8 +106,7 @@ export function useAgentConfig(ensName: string | null | undefined) {
     }
   }, [ensName])
 
-  // Fetch risk level
-  const { data: riskData, isLoading: riskLoading } = useReadContract({
+  const { data: _riskData, isLoading: riskLoading } = useReadContract({
     address: '0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e', // ENS Registry
     abi: [
       {
@@ -194,13 +188,8 @@ export async function writeAgentConfig(
     const normalized = normalize(ensName)
     const hash = namehash(normalized)
 
-    const resolver = await getEnsResolver(walletClient, {
-      name: normalized,
-    })
-
-    if (!resolver) {
-      throw new Error(`No resolver found for ${ensName}`)
-    }
+    const ENS_PUBLIC_RESOLVER = '0x231b0Ee14048e9dCcD1d247744d114a4EB5E8E63' as Address
+    const resolver = ENS_PUBLIC_RESOLVER
 
     const writes: Array<{
       key: string
