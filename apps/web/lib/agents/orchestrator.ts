@@ -1,15 +1,12 @@
 import Groq from 'groq-sdk'
 import type { TradeProposal, AgentProfile } from '@agentropolis/shared'
 import { TOKENS } from '../uniswap/constants'
+import type { StrategyContext } from './strategies'
 
 export interface ProposalRequest {
   agentId: string
   agentProfile?: AgentProfile
-  context: {
-    balance?: string
-    preferredTokens?: string[]
-    riskLevel?: 'low' | 'medium' | 'high'
-  }
+  context: StrategyContext
 }
 
 const FALLBACK_PROPOSAL: Omit<TradeProposal, 'id' | 'agentId'> = {
