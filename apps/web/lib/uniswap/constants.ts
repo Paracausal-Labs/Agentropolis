@@ -13,6 +13,11 @@ export const TOKENS = {
   USDC: '0x036CbD53842c5426634e7929541eC2318f3dCF7e' as const,
 }
 
+export const TOKEN_DECIMALS: Record<string, number> = {
+  [TOKENS.USDC.toLowerCase()]: 6,
+  [TOKENS.WETH.toLowerCase()]: 18,
+}
+
 export const POOL_KEY = {
   currency0: TOKENS.USDC,
   currency1: TOKENS.WETH,

@@ -5,13 +5,14 @@ import {
   encodeAbiParameters,
   encodePacked,
   http,
+  parseUnits,
   type Address,
   type Hex,
   type WalletClient,
 } from 'viem'
 import { baseSepolia } from 'viem/chains'
 import type { TradeProposal } from '@agentropolis/shared/src/types'
-import { CONTRACTS, POOL_KEY, RPC_URL } from './constants'
+import { CONTRACTS, POOL_KEY, RPC_URL, TOKEN_DECIMALS } from './constants'
 
 const UNIVERSAL_ROUTER_ABI = [
   {
@@ -75,20 +76,31 @@ const toRandomHex = () => {
   return `0x${fallback.toString(16).padStart(64, '0')}`
 }
 
-const parseAmount = (value: string) => {
+const getTokenDecimals = (address: string) =>
+  TOKEN_DECIMALS[address.toLowerCase()] ?? 18
+
+const parseAmount = (value: string, decimals: number) => {
   if (!value) return 0n
   try {
-    return BigInt(value)
+    return parseUnits(value, decimals)
   } catch {
-    return 0n
+    try {
+      return BigInt(value)
+    } catch {
+      return 0n
+    }
   }
 }
 
 const computeMinAmountOut = (expectedAmountOut: bigint, maxSlippage: number) => {
   if (expectedAmountOut === 0n) return 0n
   const slippage = Number.isFinite(maxSlippage) ? maxSlippage : 0
-  const slippageBps = Math.max(0, Math.min(10_000, Math.round(slippage * 10_000)))
-  return expectedAmountOut - (expectedAmountOut * BigInt(slippageBps)) / 10_000n
+  const slippageBps =
+    slippage <= 1
+      ? Math.round(slippage * 10_000) // treat 0-1 as fraction
+      : Math.round(slippage) // treat >1 as basis points
+  const clampedBps = Math.max(0, Math.min(10_000, slippageBps))
+  return expectedAmountOut - (expectedAmountOut * BigInt(clampedBps)) / 10_000n
 }
 
 const encodeV4SwapInput = (
@@ -206,8 +218,14 @@ export const executeSwap = async (
     transport: http(RPC_URL),
   })
 
-  const amountIn = parseAmount(proposal.amountIn)
-  const expectedAmountOut = parseAmount(proposal.expectedAmountOut)
+  const amountIn = parseAmount(
+    proposal.amountIn,
+    getTokenDecimals(proposal.pair.tokenIn.address)
+  )
+  const expectedAmountOut = parseAmount(
+    proposal.expectedAmountOut,
+    getTokenDecimals(proposal.pair.tokenOut.address)
+  )
   const minAmountOut = computeMinAmountOut(expectedAmountOut, proposal.maxSlippage)
 
   const tokenIn = proposal.pair.tokenIn.address.toLowerCase()
@@ -237,11 +255,16 @@ export const executeSwap = async (
   const commands: Hex = `0x${V4_SWAP_COMMAND.toString(16).padStart(2, '0')}`
   const inputs: Hex[] = [swapInput]
 
+  const deadlineSeconds =
+    proposal.deadline > 1_000_000_000_000
+      ? Math.floor(proposal.deadline / 1000)
+      : proposal.deadline
+
   const txHash = await walletClient.writeContract({
     address: CONTRACTS.UNIVERSAL_ROUTER,
     abi: UNIVERSAL_ROUTER_ABI,
     functionName: 'execute',
-    args: [commands, inputs, BigInt(proposal.deadline)],
+    args: [commands, inputs, BigInt(deadlineSeconds)],
     account,
     chain: walletClient.chain ?? null,
   })
