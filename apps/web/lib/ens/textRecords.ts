@@ -1,10 +1,18 @@
 'use client'
 
-import { useReadContract } from 'wagmi'
-import { mainnet } from 'viem/chains'
+import { useQuery } from '@tanstack/react-query'
+import { sepolia } from 'viem/chains'
 import { normalize, namehash } from 'viem/ens'
+import { createPublicClient, http } from 'viem'
 import { useMemo } from 'react'
 import type { WalletClient, Address } from 'viem'
+
+const SEPOLIA_PUBLIC_RESOLVER = '0xE99638b40E4Fff0129D56f03b55b6bbC4BBE49b5' as Address
+
+const sepoliaClient = createPublicClient({
+  chain: sepolia,
+  transport: http(),
+})
 
 /**
  * Agent configuration stored in ENS text records
@@ -72,30 +80,24 @@ function validateStrategy(strategy: string | null): AgentConfig['strategy'] {
   return DEFAULT_AGENT_CONFIG.strategy
 }
 
-/**
- * Read agent configuration from ENS text records
- * Returns defaults if records not found or invalid
- *
- * @param ensName - ENS name (e.g., "alice.eth")
- * @returns AgentConfig with defaults for missing values
- */
 export async function readAgentConfig(ensName: string): Promise<AgentConfig> {
   try {
-    normalize(ensName)
-    return DEFAULT_AGENT_CONFIG
+    const normalized = normalize(ensName)
+    
+    const [risk, strategy, tokens, endpoint] = await Promise.all([
+      sepoliaClient.getEnsText({ name: normalized, key: TEXT_RECORD_KEYS.RISK }).catch(() => null),
+      sepoliaClient.getEnsText({ name: normalized, key: TEXT_RECORD_KEYS.STRATEGY }).catch(() => null),
+      sepoliaClient.getEnsText({ name: normalized, key: TEXT_RECORD_KEYS.TOKENS }).catch(() => null),
+      sepoliaClient.getEnsText({ name: normalized, key: TEXT_RECORD_KEYS.ENDPOINT }).catch(() => null),
+    ])
+
+    return parseAgentConfig({ risk, strategy, tokens, endpoint })
   } catch (error) {
-    console.warn(`Failed to read ENS config for ${ensName}:`, error)
+    console.warn(`[ens] Failed to read config for ${ensName}:`, error)
     return DEFAULT_AGENT_CONFIG
   }
 }
 
-/**
- * React hook to read agent configuration from ENS text records
- * Uses wagmi's useReadContract to fetch ENS resolver data
- *
- * @param ensName - ENS name (e.g., "alice.eth")
- * @returns AgentConfig with loading/error states
- */
 export function useAgentConfig(ensName: string | null | undefined) {
   const normalized = useMemo(() => {
     if (!ensName) return null
@@ -106,37 +108,20 @@ export function useAgentConfig(ensName: string | null | undefined) {
     }
   }, [ensName])
 
-  const { data: _riskData, isLoading: riskLoading } = useReadContract({
-    address: '0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e', // ENS Registry
-    abi: [
-      {
-        name: 'resolver',
-        type: 'function',
-        inputs: [{ name: 'node', type: 'bytes32' }],
-        outputs: [{ name: '', type: 'address' }],
-        stateMutability: 'view',
-      },
-    ],
-    functionName: 'resolver',
-    args: normalized ? [normalized as any] : undefined,
-    chainId: mainnet.id,
-    query: {
-      enabled: !!normalized,
+  const { data: config, isLoading, error } = useQuery({
+    queryKey: ['ens-agent-config', normalized],
+    queryFn: async () => {
+      if (!normalized) return DEFAULT_AGENT_CONFIG
+      return readAgentConfig(normalized)
     },
+    enabled: !!normalized,
+    staleTime: 60 * 1000,
   })
 
-  // Build config from fetched data
-  const config = useMemo<AgentConfig>(() => {
-    return DEFAULT_AGENT_CONFIG
-  }, [])
-
-  const isLoading = riskLoading
-  const error = null
-
   return {
-    config,
+    config: config ?? DEFAULT_AGENT_CONFIG,
     isLoading,
-    error,
+    error: error ?? null,
   }
 }
 
@@ -188,8 +173,7 @@ export async function writeAgentConfig(
     const normalized = normalize(ensName)
     const hash = namehash(normalized)
 
-    const ENS_PUBLIC_RESOLVER = '0x231b0Ee14048e9dCcD1d247744d114a4EB5E8E63' as Address
-    const resolver = ENS_PUBLIC_RESOLVER
+    const resolver = SEPOLIA_PUBLIC_RESOLVER
 
     const writes: Array<{
       key: string
