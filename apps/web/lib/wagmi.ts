@@ -1,13 +1,14 @@
 import { http } from 'viem'
 import { createConfig } from '@wagmi/core'
-import { baseSepolia, mainnet } from 'viem/chains'
+import { baseSepolia, mainnet, sepolia } from 'viem/chains'
 import { injected } from '@wagmi/connectors'
 
 export const config = createConfig({
-  chains: [baseSepolia, mainnet],
+  chains: [baseSepolia, sepolia, mainnet],
   connectors: [injected()],
   transports: {
     [baseSepolia.id]: http(),
+    [sepolia.id]: http(),
     [mainnet.id]: http(),
   },
 })

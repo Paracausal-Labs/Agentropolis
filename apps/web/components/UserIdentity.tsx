@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useAccount, useEnsName, useEnsAvatar, useWalletClient } from 'wagmi'
-import { mainnet } from 'viem/chains'
+import { sepolia } from 'viem/chains'
 import { writeAgentConfig, getDefaultAgentConfig } from '@/lib/ens/textRecords'
 
 export function UserIdentity() {
@@ -13,16 +13,22 @@ export function UserIdentity() {
   
   const { data: ensName } = useEnsName({
     address,
-    chainId: mainnet.id,
+    chainId: sepolia.id,
   })
   
   const { data: ensAvatar } = useEnsAvatar({
     name: ensName ?? undefined,
-    chainId: mainnet.id,
+    chainId: sepolia.id,
   })
 
   const handleSaveToENS = async () => {
     if (!ensName || !walletClient) return
+    if (walletClient.chain?.id !== sepolia.id) {
+      console.warn('[ENS] Switch wallet to Ethereum Sepolia to save text records.')
+      setSaveStatus('error')
+      setTimeout(() => setSaveStatus('idle'), 3000)
+      return
+    }
     
     setIsSaving(true)
     setSaveStatus('idle')
