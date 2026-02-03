@@ -34,7 +34,7 @@ export default function DocsPage() {
             <li><strong>Settlement:</strong> When session ends, net balance settles on-chain</li>
           </ul>
           <p className="text-gray-400 text-sm">
-            Implementation: <code className="bg-gray-800 px-2 py-1 rounded">apps/web/lib/yellow/session.ts</code>, <code className="bg-gray-800 px-2 py-1 rounded">SessionProvider.tsx</code>
+            Implementation: <code className="bg-gray-800 px-2 py-1 rounded">apps/web/lib/yellow/channel.tsx</code>, <code className="bg-gray-800 px-2 py-1 rounded">SessionProvider.tsx</code>
           </p>
         </section>
 
@@ -51,7 +51,7 @@ export default function DocsPage() {
           </ul>
           <div className="bg-gray-900 rounded-lg p-4 text-sm font-mono text-gray-400 mb-4">
             <div>Chain: Base Sepolia (84532)</div>
-            <div>Universal Router: 0x6fF5693b99212Da76ad316178A184AB56D299b43</div>
+            <div>Universal Router: 0x492E6456D9528771018DeB9E87ef7750EF184104</div>
             <div>Pool Manager: 0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408</div>
           </div>
           <p className="text-gray-400 text-sm">
@@ -62,15 +62,17 @@ export default function DocsPage() {
         <section className="mb-12 bg-green-500/10 border border-green-500/30 rounded-xl p-6">
           <h2 className="text-2xl font-semibold mb-4 text-green-400">🔖 ENS Integration ($5k Track)</h2>
           <p className="text-gray-300 leading-relaxed mb-4">
-            ENS provides <strong>human-readable identity</strong> throughout the app:
+            ENS provides <strong>human-readable identity</strong> and <strong>persistent config storage</strong>:
           </p>
           <ul className="list-disc list-inside text-gray-300 space-y-2 mb-4">
             <li>Connected wallet displays ENS name (if available) or truncated address</li>
             <li>ENS avatar shown in header</li>
             <li>Council Room seats labeled with ENS names</li>
+            <li><strong>Save to ENS:</strong> Users can persist agent config to ENS text records</li>
+            <li><strong>Read from ENS:</strong> Agent preferences auto-loaded from text records on connect</li>
           </ul>
           <p className="text-gray-400 text-sm">
-            Implementation: <code className="bg-gray-800 px-2 py-1 rounded">apps/web/components/UserIdentity.tsx</code> using wagmi hooks
+            Implementation: <code className="bg-gray-800 px-2 py-1 rounded">apps/web/components/UserIdentity.tsx</code>, <code className="bg-gray-800 px-2 py-1 rounded">apps/web/lib/ens/textRecords.ts</code>
           </p>
         </section>
 

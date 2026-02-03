@@ -29,7 +29,7 @@ GROQ_API_KEY=your_groq_api_key
 
 # Optional - force mock modes for demo
 GROQ_MOCK=true
-UNISWAP_MOCK=true
+NEXT_PUBLIC_UNISWAP_MOCK=true
 ERC8004_MOCK=true
 ```
 
@@ -39,7 +39,7 @@ ERC8004_MOCK=true
 - Session-based off-chain micro-actions
 - Instant agent deployment without gas
 - On-chain settlement when session ends
-- Implementation: `apps/web/lib/yellow/session.ts`
+- Implementation: `apps/web/lib/yellow/channel.tsx`, `apps/web/components/SessionProvider.tsx`
 
 ### Uniswap v4 ($10k Track)
 - Agent proposals execute via Universal Router
@@ -50,7 +50,9 @@ ERC8004_MOCK=true
 ### ENS ($5k Track)
 - Human-readable identity display
 - ENS name + avatar in header
-- Implementation: `apps/web/components/UserIdentity.tsx`
+- Save agent config to ENS text records
+- Auto-load preferences from ENS on connect
+- Implementation: `apps/web/components/UserIdentity.tsx`, `apps/web/lib/ens/textRecords.ts`
 
 ## Tech Stack
 
@@ -85,10 +87,11 @@ packages/
 
 ## Contracts (Base Sepolia)
 
-- Universal Router: `0x6fF5693b99212Da76ad316178A184AB56D299b43`
+- Universal Router: `0x492E6456D9528771018DeB9E87ef7750EF184104`
 - Pool Manager: `0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408`
 - WETH: `0x4200000000000000000000000000000000000006`
 - USDC: `0x036CbD53842c5426634e7929541eC2318f3dCF7e`
+- ENS Resolver (Sepolia): `0xE99638b40E4Fff0129D56f03b55b6bbC4BBE49b5`
 
 ## License
 
