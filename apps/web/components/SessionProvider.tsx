@@ -145,6 +145,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [manager, actionBalance])
 
   const chargeAction = useCallback(async (type: string, amount: string) => {
+    if (!manager) {
+      throw new Error('No manager')
+    }
+
     if (channelState.status !== 'active') {
       throw new Error('Session not active')
     }
@@ -155,11 +159,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       throw new Error('Insufficient balance')
     }
 
-    const newBalance = actionBalance - chargeAmount
-    setActionBalance(newBalance)
+    console.log(`[Session] Charging ${type}: ${amount} ytest.USD`)
+    
+    const result = await manager.executeOffChainTransfer(type, chargeAmount)
+    
+    if (!result.success) {
+      throw new Error(result.error || 'Transfer failed')
+    }
 
-    console.log(`[Session] ${type}: -${amount}, balance: ${formatYtestUsd(newBalance)}`)
-  }, [channelState.status, actionBalance])
+    setActionBalance(result.newBalance)
+    setChannelState(manager.state)
+
+    console.log(`[Session] ${type} charged: -${amount}, balance: ${formatYtestUsd(result.newBalance)}`)
+  }, [manager, channelState.status, actionBalance])
 
   const chargeAgentDeploy = useCallback(async (): Promise<TransferResult> => {
     if (!manager) {
