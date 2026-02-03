@@ -7,6 +7,9 @@ import {
   ChannelManager, 
   ChannelState, 
   ChannelStatus,
+  TransferResult,
+  SettlementResult,
+  WithdrawalResult,
 } from '@/lib/yellow/channel'
 import { YELLOW_DEFAULTS, formatYtestUsd } from '@/lib/yellow/constants'
 
@@ -26,8 +29,11 @@ interface SessionContextValue {
   state: SessionState
   deposit: (amount?: bigint) => Promise<string | null>
   startSession: () => Promise<void>
-  endSession: () => Promise<void>
+  endSession: () => Promise<SettlementResult>
   chargeAction: (type: string, amount: string) => Promise<void>
+  chargeAgentDeploy: () => Promise<TransferResult>
+  executeTransfer: (destination: string, amount: bigint) => Promise<TransferResult>
+  withdraw: (amount?: bigint) => Promise<WithdrawalResult>
   isLoading: boolean
 }
 
@@ -120,19 +126,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
   }, [manager, channelState.depositAmount])
 
-  const endSession = useCallback(async () => {
-    if (!manager) return
+  const endSession = useCallback(async (): Promise<SettlementResult> => {
+    if (!manager) {
+      return { success: false, finalBalance: BigInt(0), error: 'No manager' }
+    }
     
     try {
-      await manager.closeChannel()
+      const result = await manager.closeChannel()
       setChannelState(manager.state)
       
-      console.log('[Session] Ended')
+      console.log('[Session] Ended, settlement:', result)
+      return result
     } catch (err) {
       setChannelState(manager.state)
-      throw err
+      const errorMessage = err instanceof Error ? err.message : 'Settlement failed'
+      return { success: false, finalBalance: actionBalance, error: errorMessage }
     }
-  }, [manager])
+  }, [manager, actionBalance])
 
   const chargeAction = useCallback(async (type: string, amount: string) => {
     if (channelState.status !== 'active') {
@@ -151,6 +161,60 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     console.log(`[Session] ${type}: -${amount}, balance: ${formatYtestUsd(newBalance)}`)
   }, [channelState.status, actionBalance])
 
+  const chargeAgentDeploy = useCallback(async (): Promise<TransferResult> => {
+    if (!manager) {
+      return { success: false, newBalance: BigInt(0), error: 'No manager' }
+    }
+
+    if (channelState.status !== 'active') {
+      return { success: false, newBalance: actionBalance, error: 'Session not active' }
+    }
+
+    const deployCost = YELLOW_DEFAULTS.AGENT_DEPLOY_COST
+    
+    if (deployCost > actionBalance) {
+      return { success: false, newBalance: actionBalance, error: 'Insufficient balance for agent deploy' }
+    }
+
+    console.log(`[Session] Charging agent deploy: ${formatYtestUsd(deployCost)} ytest.USD`)
+    
+    const result = await manager.executeOffChainTransfer('agent-deploy', deployCost)
+    
+    if (result.success) {
+      setActionBalance(result.newBalance)
+      setChannelState(manager.state)
+    }
+    
+    return result
+  }, [manager, channelState.status, actionBalance])
+
+  const executeTransfer = useCallback(async (destination: string, amount: bigint): Promise<TransferResult> => {
+    if (!manager) {
+      return { success: false, newBalance: BigInt(0), error: 'No manager' }
+    }
+
+    const result = await manager.executeOffChainTransfer(destination, amount)
+    
+    if (result.success) {
+      setActionBalance(result.newBalance)
+      setChannelState(manager.state)
+    }
+    
+    return result
+  }, [manager])
+
+  const withdraw = useCallback(async (amount?: bigint): Promise<WithdrawalResult> => {
+    if (!manager) {
+      return { success: false, amount: BigInt(0), error: 'No manager' }
+    }
+
+    const result = await manager.withdrawFromYellow(amount)
+    setChannelState(manager.state)
+    setActionBalance(manager.state.balance)
+    
+    return result
+  }, [manager])
+
   return (
     <SessionContext.Provider value={{ 
       state, 
@@ -158,6 +222,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       startSession, 
       endSession, 
       chargeAction,
+      chargeAgentDeploy,
+      executeTransfer,
+      withdraw,
       isLoading,
     }}>
       {children}
@@ -174,7 +241,7 @@ export function useSession() {
 }
 
 export function SessionStatus() {
-  const { state, deposit, startSession, endSession, isLoading } = useSession()
+  const { state, deposit, startSession, endSession, withdraw, isLoading } = useSession()
   
   const statusColors: Record<string, string> = {
     disconnected: 'bg-gray-500',
@@ -200,15 +267,34 @@ export function SessionStatus() {
       console.error('[Session] Deposit failed:', err)
     }
   }
+
+  const handleEnd = async () => {
+    try {
+      const result = await endSession()
+      console.log('[Session] Settlement result:', result)
+    } catch (err) {
+      console.error('[Session] End failed:', err)
+    }
+  }
+
+  const handleWithdraw = async () => {
+    try {
+      const result = await withdraw()
+      console.log('[Session] Withdrawal result:', result)
+    } catch (err) {
+      console.error('[Session] Withdraw failed:', err)
+    }
+  }
   
   return (
     <div className="flex items-center gap-3 bg-gray-800 rounded-lg px-4 py-2">
       <div className={`w-3 h-3 rounded-full ${statusColors[state.status]}`} />
       <div className="text-sm">
         <div className="text-white font-medium capitalize">
-          {state.status === 'connecting' ? 'Starting...' : state.status}
+          {state.status === 'connecting' ? 'Starting...' : 
+           state.status === 'settling' ? 'Settling...' : state.status}
         </div>
-        {state.status === 'active' && (
+        {(state.status === 'active' || state.status === 'settled') && (
           <div className="text-gray-400 text-xs">Balance: {state.balance} yUSD</div>
         )}
         {state.error && (
@@ -238,11 +324,21 @@ export function SessionStatus() {
       
       {state.status === 'active' && (
         <button
-          onClick={endSession}
+          onClick={handleEnd}
           disabled={isLoading}
           className="ml-2 px-3 py-1 bg-gray-600 text-white text-xs rounded hover:bg-gray-500 disabled:opacity-50"
         >
           End Session
+        </button>
+      )}
+
+      {state.status === 'settled' && parseFloat(state.balance) > 0 && (
+        <button
+          onClick={handleWithdraw}
+          disabled={isLoading}
+          className="ml-2 px-3 py-1 bg-green-600 text-white text-xs font-bold rounded hover:bg-green-500 disabled:opacity-50"
+        >
+          Withdraw
         </button>
       )}
     </div>

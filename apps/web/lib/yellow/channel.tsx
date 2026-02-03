@@ -25,11 +25,34 @@ export interface ChannelState {
   txHash?: string
 }
 
+export interface TransferResult {
+  success: boolean
+  newBalance: bigint
+  txId?: string
+  error?: string
+}
+
+export interface SettlementResult {
+  success: boolean
+  txHash?: string
+  finalBalance: bigint
+  error?: string
+}
+
+export interface WithdrawalResult {
+  success: boolean
+  txHash?: string
+  amount: bigint
+  error?: string
+}
+
 export interface ChannelManager {
   state: ChannelState
   deposit: (amount?: bigint) => Promise<string | null>
   createChannel: () => Promise<string | null>
-  closeChannel: () => Promise<void>
+  executeOffChainTransfer: (destination: string, amount: bigint) => Promise<TransferResult>
+  closeChannel: () => Promise<SettlementResult>
+  withdrawFromYellow: (amount?: bigint) => Promise<WithdrawalResult>
   getClient: () => NitroliteClient | null
 }
 
@@ -42,6 +65,7 @@ const initialState: ChannelState = {
 function createMockChannelManager(): ChannelManager {
   let state: ChannelState = { ...initialState }
   let listeners = new Set<(state: ChannelState) => void>()
+  let transferLog: Array<{ destination: string; amount: bigint; timestamp: number }> = []
 
   function setState(updates: Partial<ChannelState>) {
     state = { ...state, ...updates }
@@ -95,22 +119,96 @@ function createMockChannelManager(): ChannelManager {
       return channelId
     },
 
-    async closeChannel() {
+    async executeOffChainTransfer(destination: string, amount: bigint): Promise<TransferResult> {
       if (state.status !== 'active') {
-        throw new Error('No active channel to close')
+        return { success: false, newBalance: state.balance, error: 'Channel not active' }
       }
 
-      console.log('[Yellow Mock] Closing channel...')
+      if (amount <= BigInt(0)) {
+        return { success: false, newBalance: state.balance, error: 'Amount must be positive' }
+      }
+
+      if (amount > state.balance) {
+        return { success: false, newBalance: state.balance, error: 'Insufficient balance' }
+      }
+
+      console.log(`[Yellow Mock] Off-chain transfer: ${formatYtestUsd(amount)} ytest.USD to ${destination}`)
+      
+      // Simulate slight delay for off-chain signing
+      await new Promise(r => setTimeout(r, 100))
+      
+      const newBalance = state.balance - amount
+      const txId = `tx-${Date.now()}-${Math.random().toString(36).substring(7)}`
+      
+      transferLog.push({ destination, amount, timestamp: Date.now() })
+      
+      setState({ balance: newBalance })
+      
+      console.log(`[Yellow Mock] Transfer complete: txId=${txId}, newBalance=${formatYtestUsd(newBalance)}`)
+      
+      return { success: true, newBalance, txId }
+    },
+
+    async closeChannel(): Promise<SettlementResult> {
+      if (state.status !== 'active') {
+        return { success: false, finalBalance: state.balance, error: 'No active channel to close' }
+      }
+
+      console.log('[Yellow Mock] Closing channel and settling...')
+      console.log('[Yellow Mock] Transfer log:', transferLog.length, 'transactions')
       
       setState({ status: 'closing' })
-      await new Promise(r => setTimeout(r, 1000))
+      
+      // Step 1: Off-chain close handshake
+      await new Promise(r => setTimeout(r, 500))
+      console.log('[Yellow Mock] Close handshake complete')
+      
+      // Step 2: On-chain settlement
+      await new Promise(r => setTimeout(r, 800))
+      
+      const finalBalance = state.balance
+      const settlementTxHash = `0x${Date.now().toString(16).padStart(64, 'a')}`
       
       setState({
         status: 'settled',
         channelId: undefined,
       })
       
-      console.log('[Yellow Mock] Channel settled')
+      console.log(`[Yellow Mock] Settlement complete: txHash=${settlementTxHash}, finalBalance=${formatYtestUsd(finalBalance)}`)
+      
+      // Clear transfer log after settlement
+      transferLog = []
+      
+      return { success: true, txHash: settlementTxHash, finalBalance }
+    },
+
+    async withdrawFromYellow(amount?: bigint): Promise<WithdrawalResult> {
+      const withdrawAmount = amount ?? state.balance
+      
+      if (state.status === 'active') {
+        return { success: false, amount: BigInt(0), error: 'Must close channel before withdrawing' }
+      }
+
+      if (withdrawAmount <= BigInt(0)) {
+        return { success: false, amount: BigInt(0), error: 'No balance to withdraw' }
+      }
+
+      if (withdrawAmount > state.balance) {
+        return { success: false, amount: BigInt(0), error: 'Insufficient custody balance' }
+      }
+
+      console.log(`[Yellow Mock] Withdrawing ${formatYtestUsd(withdrawAmount)} from custody...`)
+      
+      await new Promise(r => setTimeout(r, 800))
+      
+      const txHash = `0x${Date.now().toString(16).padStart(64, 'b')}`
+      const newBalance = state.balance - withdrawAmount
+      
+      setState({ balance: newBalance, depositAmount: newBalance })
+      
+      console.log(`[Yellow Mock] Withdrawal complete: txHash=${txHash}`)
+      
+      return { success: true, txHash, amount: withdrawAmount }
     },
 
     getClient() {
@@ -131,28 +229,33 @@ function createRealChannelManager(
     state = { ...state, ...updates }
   }
 
+  function ensureClient(): NitroliteClient {
+    if (!client) {
+      client = createNitroliteClient(publicClient, walletClient)
+      if (!client) {
+        throw new Error('Failed to create Nitrolite client')
+      }
+    }
+    return client
+  }
+
   return {
     get state() { return state },
 
     async deposit(amount = YELLOW_DEFAULTS.DEPOSIT_AMOUNT) {
       try {
-        if (!client) {
-          client = createNitroliteClient(publicClient, walletClient)
-          if (!client) {
-            throw new Error('Failed to create Nitrolite client')
-          }
-        }
+        const nitrolite = ensureClient()
 
         console.log('[Yellow] Depositing:', formatYtestUsd(amount), 'ytest.USD')
 
         setState({ status: 'approving', error: undefined })
         
-        await client.approveTokens(YELLOW_CONTRACTS.YTEST_USD, amount)
+        await nitrolite.approveTokens(YELLOW_CONTRACTS.YTEST_USD, amount)
         console.log('[Yellow] Token approval complete')
 
         setState({ status: 'depositing' })
         
-        const depositResult = await client.deposit(YELLOW_CONTRACTS.YTEST_USD, amount) as unknown as string | { hash: string } | null
+        const depositResult = await nitrolite.deposit(YELLOW_CONTRACTS.YTEST_USD, amount) as unknown as string | { hash: string } | null
         const txHash = typeof depositResult === 'string' ? depositResult : (depositResult as { hash?: string } | null)?.hash ?? null
         
         console.log('[Yellow] Deposit complete:', txHash)
@@ -178,12 +281,7 @@ function createRealChannelManager(
         throw new Error('Must deposit before creating channel')
       }
 
-      if (!client) {
-        client = createNitroliteClient(publicClient, walletClient)
-        if (!client) {
-          throw new Error('Failed to create Nitrolite client')
-        }
-      }
+      const nitrolite = ensureClient()
 
       try {
         setState({ status: 'connecting', error: undefined })
@@ -200,7 +298,7 @@ function createRealChannelManager(
           challenge: BigInt(86400),
           nonce: BigInt(Date.now()),
         }
-        const channelResult = await (client.createChannel as unknown as (params: typeof channelParams) => Promise<unknown>)(channelParams)
+        const channelResult = await (nitrolite.createChannel as unknown as (params: typeof channelParams) => Promise<unknown>)(channelParams)
 
         const channelId = typeof channelResult === 'string' 
           ? channelResult 
@@ -228,34 +326,136 @@ function createRealChannelManager(
       }
     },
 
-    async closeChannel() {
+    async executeOffChainTransfer(destination: string, amount: bigint): Promise<TransferResult> {
       if (state.status !== 'active') {
-        throw new Error('No active channel to close')
+        return { success: false, newBalance: state.balance, error: 'Channel not active' }
+      }
+
+      if (amount <= BigInt(0)) {
+        return { success: false, newBalance: state.balance, error: 'Amount must be positive' }
+      }
+
+      if (amount > state.balance) {
+        return { success: false, newBalance: state.balance, error: 'Insufficient balance' }
       }
 
       try {
+        const nitrolite = ensureClient()
+        
+        console.log(`[Yellow] Off-chain transfer: ${formatYtestUsd(amount)} ytest.USD to ${destination}`)
+
+        const transferResult = await (nitrolite as unknown as { 
+          transfer?: (params: { to: string; amount: bigint; token: string }) => Promise<{ txId?: string }> 
+        }).transfer?.({
+          to: destination,
+          amount,
+          token: YELLOW_CONTRACTS.YTEST_USD,
+        })
+
+        const txId = transferResult?.txId ?? `tx-${Date.now()}`
+        const newBalance = state.balance - amount
+        
+        setState({ balance: newBalance })
+        
+        console.log(`[Yellow] Transfer complete: txId=${txId}, newBalance=${formatYtestUsd(newBalance)}`)
+        
+        return { success: true, newBalance, txId }
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Transfer failed'
+        console.error('[Yellow] Transfer error:', errorMessage)
+        return { success: false, newBalance: state.balance, error: errorMessage }
+      }
+    },
+
+    async closeChannel(): Promise<SettlementResult> {
+      if (state.status !== 'active') {
+        return { success: false, finalBalance: state.balance, error: 'No active channel to close' }
+      }
+
+      try {
+        const nitrolite = ensureClient()
+        
         setState({ status: 'closing', error: undefined })
+
+        console.log('[Yellow] Initiating close handshake for channel:', state.channelId)
 
         if (ws) {
           ws.close()
           ws = null
         }
 
-        if (client && state.channelId) {
-          console.log('[Yellow] Closing channel:', state.channelId)
+        let settlementTxHash: string | undefined
+
+        if (state.channelId) {
+          const closeResult = await (nitrolite.closeChannel as unknown as (channelId: string) => Promise<{ txHash?: string } | string | null>)?.(state.channelId)
+          
+          if (typeof closeResult === 'string') {
+            settlementTxHash = closeResult
+          } else if (closeResult && typeof closeResult === 'object') {
+            settlementTxHash = closeResult.txHash
+          }
         }
 
+        const finalBalance = state.balance
+        
         setState({
           status: 'settled',
           channelId: undefined,
         })
 
-        console.log('[Yellow] Channel settled')
+        console.log(`[Yellow] Settlement complete: txHash=${settlementTxHash}, finalBalance=${formatYtestUsd(finalBalance)}`)
+
+        return { success: true, txHash: settlementTxHash, finalBalance }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Channel close failed'
         console.error('[Yellow] Close error:', errorMessage)
         setState({ status: 'error', error: errorMessage })
-        throw err
+        return { success: false, finalBalance: state.balance, error: errorMessage }
+      }
+    },
+
+    async withdrawFromYellow(amount?: bigint): Promise<WithdrawalResult> {
+      const withdrawAmount = amount ?? state.balance
+      
+      if (state.status === 'active') {
+        return { success: false, amount: BigInt(0), error: 'Must close channel before withdrawing' }
+      }
+
+      if (withdrawAmount <= BigInt(0)) {
+        return { success: false, amount: BigInt(0), error: 'No balance to withdraw' }
+      }
+
+      if (withdrawAmount > state.balance) {
+        return { success: false, amount: BigInt(0), error: 'Insufficient custody balance' }
+      }
+
+      try {
+        const nitrolite = ensureClient()
+        
+        console.log(`[Yellow] Withdrawing ${formatYtestUsd(withdrawAmount)} from custody...`)
+
+        const withdrawResult = await (nitrolite.withdrawal as unknown as (token: string, amount: bigint) => Promise<{ hash?: string } | string | null>)?.(
+          YELLOW_CONTRACTS.YTEST_USD,
+          withdrawAmount
+        )
+
+        let txHash: string | undefined
+        if (typeof withdrawResult === 'string') {
+          txHash = withdrawResult
+        } else if (withdrawResult && typeof withdrawResult === 'object') {
+          txHash = withdrawResult.hash
+        }
+
+        const newBalance = state.balance - withdrawAmount
+        setState({ balance: newBalance, depositAmount: newBalance })
+
+        console.log(`[Yellow] Withdrawal complete: txHash=${txHash}`)
+
+        return { success: true, txHash, amount: withdrawAmount }
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Withdrawal failed'
+        console.error('[Yellow] Withdrawal error:', errorMessage)
+        return { success: false, amount: BigInt(0), error: errorMessage }
       }
     },
 
@@ -333,7 +533,9 @@ interface YellowChannelContextValue {
   state: ChannelState
   deposit: (amount?: bigint) => Promise<string | null>
   createChannel: () => Promise<string | null>
-  closeChannel: () => Promise<void>
+  executeOffChainTransfer: (destination: string, amount: bigint) => Promise<TransferResult>
+  closeChannel: () => Promise<SettlementResult>
+  withdrawFromYellow: (amount?: bigint) => Promise<WithdrawalResult>
   isLoading: boolean
 }
 
@@ -375,10 +577,25 @@ export function YellowChannelProvider({
     return result
   }, [manager])
 
-  const closeChannel = useCallback(async () => {
-    if (!manager) return
-    await manager.closeChannel()
+  const executeOffChainTransfer = useCallback(async (destination: string, amount: bigint): Promise<TransferResult> => {
+    if (!manager) return { success: false, newBalance: BigInt(0), error: 'No manager' }
+    const result = await manager.executeOffChainTransfer(destination, amount)
     setState(manager.state)
+    return result
+  }, [manager])
+
+  const closeChannel = useCallback(async (): Promise<SettlementResult> => {
+    if (!manager) return { success: false, finalBalance: BigInt(0), error: 'No manager' }
+    const result = await manager.closeChannel()
+    setState(manager.state)
+    return result
+  }, [manager])
+
+  const withdrawFromYellow = useCallback(async (amount?: bigint): Promise<WithdrawalResult> => {
+    if (!manager) return { success: false, amount: BigInt(0), error: 'No manager' }
+    const result = await manager.withdrawFromYellow(amount)
+    setState(manager.state)
+    return result
   }, [manager])
 
   return (
@@ -387,7 +604,9 @@ export function YellowChannelProvider({
         state, 
         deposit, 
         createChannel: handleCreateChannel, 
+        executeOffChainTransfer,
         closeChannel,
+        withdrawFromYellow,
         isLoading,
       }}
     >

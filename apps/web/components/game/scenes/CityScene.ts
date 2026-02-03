@@ -453,15 +453,37 @@ export class CityScene extends Phaser.Scene {
     })
   }
 
-  private deployAgent(agent: { agentId: number; name: string }) {
+  private async deployAgent(agent: { agentId: number; name: string }) {
     if (this.deployedAgents.length >= AGENT_POSITIONS.length) {
       console.log('[CityScene] Max agents deployed')
+      this.showDeployError('Max agents deployed')
       return
     }
     
     if (this.deployedAgents.some(a => a.id === String(agent.agentId))) {
       console.log('[CityScene] Agent already deployed')
+      this.showDeployError('Agent already deployed')
       return
+    }
+
+    const agentropolis = (window as unknown as { agentropolis?: { 
+      chargeAgentDeploy: () => Promise<{ success: boolean; error?: string }>
+      isSessionActive: () => boolean 
+    } }).agentropolis
+
+    if (agentropolis?.isSessionActive()) {
+      console.log('[CityScene] Charging agent deploy fee...')
+      const result = await agentropolis.chargeAgentDeploy()
+      
+      if (!result.success) {
+        console.log('[CityScene] Deploy charge failed:', result.error)
+        this.showDeployError(result.error || 'Insufficient balance')
+        return
+      }
+      
+      console.log('[CityScene] Deploy fee charged successfully')
+    } else {
+      console.log('[CityScene] No active session - deploying without charge (demo mode)')
     }
     
     const pos = AGENT_POSITIONS[this.deployedAgents.length]
@@ -483,6 +505,25 @@ export class CityScene extends Phaser.Scene {
     
     this.agentPanel?.setVisible(false)
     this.isPanelOpen = false
+  }
+
+  private showDeployError(message: string) {
+    const errorText = this.add.text(
+      this.cameras.main.width / 2,
+      this.cameras.main.height / 2,
+      message,
+      {
+        fontSize: '16px',
+        color: '#ef4444',
+        fontFamily: 'Arial',
+        backgroundColor: '#1e293b',
+        padding: { x: 16, y: 8 },
+      }
+    ).setOrigin(0.5).setScrollFactor(0).setDepth(1000)
+
+    this.time.delayedCall(2000, () => {
+      errorText.destroy()
+    })
   }
 
   private createAgentSprite(x: number, y: number, name: string): Phaser.GameObjects.Container {
