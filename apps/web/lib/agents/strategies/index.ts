@@ -2,3 +2,5 @@ export type { AgentStrategy, StrategyContext, StrategyProposalRequest, StrategyR
 export { DefaultStrategyRegistry } from './base'
 export { DCAStrategy } from './dca'
 export { MomentumStrategy } from './momentum'
+export { RiskValidatorStrategy } from './riskValidator'
+export type { RiskAssessment } from './riskValidator'
