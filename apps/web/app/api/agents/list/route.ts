@@ -15,8 +15,8 @@ function isCacheValid(entry: CacheEntry | null, mockMode: boolean): boolean {
   return Date.now() - entry.timestamp < CACHE_TTL_MS
 }
 
-function getCachedAgents(limit: number): NextResponse | null {
-  if (!isCacheValid(agentCache, false)) return null
+function getCachedAgents(limit: number, mockMode: boolean): NextResponse | null {
+  if (!isCacheValid(agentCache, mockMode)) return null
   console.log('[API] Returning cached agents')
   const agents = agentCache!.data.slice(0, limit)
   return NextResponse.json(agents, {
@@ -73,9 +73,11 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
     const limit = Math.min(parseInt(searchParams.get('limit') || '10'), 50)
-    const mockMode = searchParams.get('mock') === 'true'
+    const mockParam = searchParams.get('mock')
+    const mockMode =
+      mockParam !== null ? mockParam === 'true' : process.env.ERC8004_MOCK === 'true'
 
-    const cachedResponse = getCachedAgents(limit)
+    const cachedResponse = getCachedAgents(limit, mockMode)
     if (cachedResponse) return cachedResponse
 
     return await getFreshAgents(limit, mockMode)
