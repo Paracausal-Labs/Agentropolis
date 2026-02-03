@@ -267,6 +267,17 @@ export class CouncilScene extends Phaser.Scene {
       if (child instanceof Phaser.GameObjects.GameObject) child.destroy()
       this.proposalCard.list.pop()
     }
+
+    this.proposalCard.setAlpha(0)
+    this.proposalCard.setScale(0.9)
+    
+    const riskColors: Record<string, number> = { low: 0x22c55e, medium: 0xeab308, high: 0xef4444 }
+    const riskColor = riskColors[proposal.riskLevel] || 0x94a3b8
+    
+    const riskIndicator = this.add.graphics()
+    riskIndicator.fillStyle(riskColor, 1)
+    riskIndicator.fillRoundedRect(-250, -80, 6, 160, 3)
+    this.proposalCard.add(riskIndicator)
     
     const title = this.add.text(0, -55, `📊 Trade Proposal from ${proposal.agentName}`, {
       fontSize: '14px',
@@ -289,26 +300,67 @@ export class CouncilScene extends Phaser.Scene {
       fontSize: '12px',
       color: '#94a3b8',
       fontFamily: 'Arial',
-      wordWrap: { width: 450 },
+      wordWrap: { width: 420 },
     }).setOrigin(0.5)
     this.proposalCard.add(reasonText)
-    
-    const riskColors: Record<string, string> = {
-      low: '#22c55e',
-      medium: '#eab308',
-      high: '#ef4444',
-    }
-    
-    const statsText = this.add.text(0, 50, 
-      `Confidence: ${proposal.confidence}%  •  Risk: ${proposal.riskLevel.toUpperCase()}`, {
-      fontSize: '12px',
-      color: riskColors[proposal.riskLevel] || '#94a3b8',
+
+    const confidenceBarBg = this.add.graphics()
+    confidenceBarBg.fillStyle(0x374151, 1)
+    confidenceBarBg.fillRoundedRect(-100, 48, 200, 12, 6)
+    this.proposalCard.add(confidenceBarBg)
+
+    const confidenceBar = this.add.graphics()
+    const barColor = proposal.confidence >= 75 ? 0x22c55e : proposal.confidence >= 50 ? 0xeab308 : 0xef4444
+    confidenceBar.fillStyle(barColor, 1)
+    confidenceBar.fillRoundedRect(-100, 48, (proposal.confidence / 100) * 200, 12, 6)
+    this.proposalCard.add(confidenceBar)
+
+    const confidenceLabel = this.add.text(-110, 47, `${proposal.confidence}%`, {
+      fontSize: '10px',
+      color: '#94a3b8',
       fontFamily: 'Arial',
-    }).setOrigin(0.5)
-    this.proposalCard.add(statsText)
+    }).setOrigin(1, 0)
+    this.proposalCard.add(confidenceLabel)
+
+    const riskLabel = this.add.text(110, 47, proposal.riskLevel.toUpperCase(), {
+      fontSize: '10px',
+      color: Phaser.Display.Color.IntegerToColor(riskColor).rgba,
+      fontFamily: 'Arial',
+      fontStyle: 'bold',
+    }).setOrigin(0, 0)
+    this.proposalCard.add(riskLabel)
+
+    this.tweens.add({
+      targets: this.proposalCard,
+      alpha: 1,
+      scale: 1,
+      duration: 300,
+      ease: 'Back.easeOut',
+    })
     
     this.approveBtn?.setVisible(true)
     this.rejectBtn?.setVisible(true)
+
+    if (this.approveBtn) {
+      this.approveBtn.setScale(0)
+      this.tweens.add({
+        targets: this.approveBtn,
+        scale: 1,
+        duration: 200,
+        delay: 200,
+        ease: 'Back.easeOut',
+      })
+    }
+    if (this.rejectBtn) {
+      this.rejectBtn.setScale(0)
+      this.tweens.add({
+        targets: this.rejectBtn,
+        scale: 1,
+        duration: 200,
+        delay: 250,
+        ease: 'Back.easeOut',
+      })
+    }
   }
 
   private handleApprove() {
