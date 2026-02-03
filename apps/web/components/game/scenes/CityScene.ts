@@ -35,6 +35,7 @@ interface DeployedAgent {
   sprite: Phaser.GameObjects.Container
   gridX: number
   gridY: number
+  isWalking?: boolean
 }
 
 const AGENT_POSITIONS = [
@@ -492,16 +493,21 @@ export class CityScene extends Phaser.Scene {
     const agentSprite = this.createAgentSprite(screenPos.x, screenPos.y, agent.name)
     this.tileContainer!.add(agentSprite)
     
-    this.deployedAgents.push({
+    const deployedAgent: DeployedAgent = {
       id: String(agent.agentId),
       name: agent.name,
       sprite: agentSprite,
       gridX: pos.x,
       gridY: pos.y,
-    })
+      isWalking: false,
+    }
+    
+    this.deployedAgents.push(deployedAgent)
     
     console.log(`[CityScene] Deployed agent: ${agent.name}`)
     this.game.events.emit('agentDeployed', agent)
+    
+    this.time.delayedCall(1000, () => this.startAgentWalking(deployedAgent))
     
     this.agentPanel?.setVisible(false)
     this.isPanelOpen = false
@@ -590,6 +596,54 @@ export class CityScene extends Phaser.Scene {
       const zoomDelta = deltaY > 0 ? -0.1 : 0.1
       const newZoom = Phaser.Math.Clamp(this.cameras.main.zoom + zoomDelta, 0.5, 2)
       this.cameras.main.setZoom(newZoom)
+    })
+  }
+
+  private getAdjacentRoadTiles(x: number, y: number): Array<{ x: number; y: number }> {
+    const directions = [
+      { dx: 0, dy: -1 },
+      { dx: 0, dy: 1 },
+      { dx: -1, dy: 0 },
+      { dx: 1, dy: 0 },
+    ]
+
+    return directions
+      .map(d => ({ x: x + d.dx, y: y + d.dy }))
+      .filter(pos => {
+        if (pos.x < 0 || pos.x >= GRID_SIZE || pos.y < 0 || pos.y >= GRID_SIZE) return false
+        const tile = CITY_MAP[pos.y]?.[pos.x]
+        return tile === 1
+      })
+  }
+
+  private startAgentWalking(agent: DeployedAgent) {
+    if (agent.isWalking) return
+    agent.isWalking = true
+    this.walkToNextTile(agent)
+  }
+
+  private walkToNextTile(agent: DeployedAgent) {
+    const adjacentRoads = this.getAdjacentRoadTiles(agent.gridX, agent.gridY)
+    
+    if (adjacentRoads.length === 0) {
+      this.time.delayedCall(2000, () => this.walkToNextTile(agent))
+      return
+    }
+
+    const nextTile = adjacentRoads[Math.floor(Math.random() * adjacentRoads.length)]
+    const screenPos = this.gridToIso(nextTile.x, nextTile.y)
+
+    this.tweens.add({
+      targets: agent.sprite,
+      x: screenPos.x,
+      y: screenPos.y - 10,
+      duration: 1500,
+      ease: 'Linear',
+      onComplete: () => {
+        agent.gridX = nextTile.x
+        agent.gridY = nextTile.y
+        this.time.delayedCall(500 + Math.random() * 1500, () => this.walkToNextTile(agent))
+      }
     })
   }
 
