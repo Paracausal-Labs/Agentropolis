@@ -3,6 +3,7 @@ import { useWalletClient } from 'wagmi'
 import {
   createPublicClient,
   encodeAbiParameters,
+  encodePacked,
   http,
   type Address,
   type Hex,
@@ -49,7 +50,13 @@ const ERC20_ABI = [
   },
 ] as const
 
-const V4_SWAP_COMMAND = '0x00'
+const V4_SWAP_COMMAND = 0x10
+
+const V4_ACTIONS = {
+  SWAP_EXACT_IN_SINGLE: 0x06,
+  SETTLE_ALL: 0x0c,
+  TAKE_ALL: 0x0f,
+} as const
 
 const mockEnabled =
   process.env.NEXT_PUBLIC_UNISWAP_MOCK === 'true' ||
@@ -87,37 +94,71 @@ const computeMinAmountOut = (expectedAmountOut: bigint, maxSlippage: number) => 
 const encodeV4SwapInput = (
   account: Address,
   amountIn: bigint,
-  minAmountOut: bigint
+  minAmountOut: bigint,
+  zeroForOne: boolean
 ): Hex => {
-  return encodeAbiParameters(
+  const actions = encodePacked(
+    ['uint8', 'uint8', 'uint8'],
+    [V4_ACTIONS.SWAP_EXACT_IN_SINGLE, V4_ACTIONS.SETTLE_ALL, V4_ACTIONS.TAKE_ALL]
+  )
+
+  const swapParams = encodeAbiParameters(
     [
       {
-        name: 'poolKey',
+        name: 'params',
         type: 'tuple',
         components: [
-          { name: 'currency0', type: 'address' },
-          { name: 'currency1', type: 'address' },
-          { name: 'fee', type: 'uint24' },
-          { name: 'tickSpacing', type: 'int24' },
-          { name: 'hooks', type: 'address' },
+          {
+            name: 'poolKey',
+            type: 'tuple',
+            components: [
+              { name: 'currency0', type: 'address' },
+              { name: 'currency1', type: 'address' },
+              { name: 'fee', type: 'uint24' },
+              { name: 'tickSpacing', type: 'int24' },
+              { name: 'hooks', type: 'address' },
+            ],
+          },
+          { name: 'zeroForOne', type: 'bool' },
+          { name: 'amountIn', type: 'uint128' },
+          { name: 'amountOutMinimum', type: 'uint128' },
+          { name: 'hookData', type: 'bytes' },
         ],
       },
-      { name: 'amountIn', type: 'uint256' },
-      { name: 'minAmountOut', type: 'uint256' },
-      { name: 'recipient', type: 'address' },
     ],
     [
       {
-        currency0: POOL_KEY.currency0,
-        currency1: POOL_KEY.currency1,
-        fee: POOL_KEY.fee,
-        tickSpacing: POOL_KEY.tickSpacing,
-        hooks: POOL_KEY.hooks,
+        poolKey: {
+          currency0: POOL_KEY.currency0,
+          currency1: POOL_KEY.currency1,
+          fee: POOL_KEY.fee,
+          tickSpacing: POOL_KEY.tickSpacing,
+          hooks: POOL_KEY.hooks,
+        },
+        zeroForOne,
+        amountIn,
+        amountOutMinimum: minAmountOut,
+        hookData: '0x',
       },
-      amountIn,
-      minAmountOut,
-      account,
     ]
+  )
+
+  const currencyIn = zeroForOne ? POOL_KEY.currency0 : POOL_KEY.currency1
+  const currencyOut = zeroForOne ? POOL_KEY.currency1 : POOL_KEY.currency0
+
+  const settleParams = encodeAbiParameters(
+    [{ name: 'currency', type: 'address' }, { name: 'maxAmount', type: 'uint256' }],
+    [currencyIn, amountIn]
+  )
+
+  const takeParams = encodeAbiParameters(
+    [{ name: 'currency', type: 'address' }, { name: 'recipient', type: 'address' }, { name: 'minAmount', type: 'uint256' }],
+    [currencyOut, account, minAmountOut]
+  )
+
+  return encodeAbiParameters(
+    [{ name: 'actions', type: 'bytes' }, { name: 'params', type: 'bytes[]' }],
+    [actions, [swapParams, settleParams, takeParams]]
   )
 }
 
@@ -169,11 +210,14 @@ export const executeSwap = async (
   const expectedAmountOut = parseAmount(proposal.expectedAmountOut)
   const minAmountOut = computeMinAmountOut(expectedAmountOut, proposal.maxSlippage)
 
+  const tokenIn = proposal.pair.tokenIn.address.toLowerCase()
+  const zeroForOne = tokenIn === POOL_KEY.currency0.toLowerCase()
+
   const allowance = await publicClient.readContract({
     address: proposal.pair.tokenIn.address as Address,
     abi: ERC20_ABI,
     functionName: 'allowance',
-    args: [account, CONTRACTS.PERMIT2],
+    args: [account, CONTRACTS.UNIVERSAL_ROUTER],
   })
 
   if (allowance < amountIn) {
@@ -181,7 +225,7 @@ export const executeSwap = async (
       address: proposal.pair.tokenIn.address as Address,
       abi: ERC20_ABI,
       functionName: 'approve',
-      args: [CONTRACTS.PERMIT2, amountIn],
+      args: [CONTRACTS.UNIVERSAL_ROUTER, amountIn],
       account,
       chain: walletClient.chain ?? null,
     })
@@ -189,8 +233,8 @@ export const executeSwap = async (
     await publicClient.waitForTransactionReceipt({ hash: approvalHash })
   }
 
-  const swapInput = encodeV4SwapInput(account, amountIn, minAmountOut)
-  const commands: Hex = V4_SWAP_COMMAND
+  const swapInput = encodeV4SwapInput(account, amountIn, minAmountOut, zeroForOne)
+  const commands: Hex = `0x${V4_SWAP_COMMAND.toString(16).padStart(2, '0')}`
   const inputs: Hex[] = [swapInput]
 
   const txHash = await walletClient.writeContract({
