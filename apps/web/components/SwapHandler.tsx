@@ -1,9 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useAccount } from 'wagmi'
-import { executeSwap } from '@/lib/uniswap/executor'
 import type { TradeProposal } from '@agentropolis/shared'
+import { useSwapExecutor } from '@/lib/uniswap/executor'
 
 interface SwapResult {
   status: 'idle' | 'pending' | 'success' | 'error'
@@ -12,7 +11,7 @@ interface SwapResult {
 }
 
 export function SwapHandler() {
-  const { address } = useAccount()
+  const { executeSwap } = useSwapExecutor()
   const [result, setResult] = useState<SwapResult>({ status: 'idle' })
 
   useEffect(() => {
@@ -33,15 +32,40 @@ export function SwapHandler() {
       setTimeout(() => setResult({ status: 'idle' }), 5000)
     }
 
-    if (typeof window !== 'undefined' && (window as any).game) {
-      const game = (window as any).game as Phaser.Game
+    if (typeof window === 'undefined') return
+
+    let cleanup: (() => void) | null = null
+    let attached = false
+
+    const tryAttach = () => {
+      if (attached) return true
+      const game = (window as any).game as Phaser.Game | undefined
+      if (!game) return false
       game.events.on('proposalApproved', handleProposalApproved)
-      
-      return () => {
+      cleanup = () => {
         game.events.off('proposalApproved', handleProposalApproved)
       }
+      attached = true
+      return true
     }
-  }, [address])
+
+    if (!tryAttach()) {
+      const interval = setInterval(() => {
+        if (tryAttach()) {
+          clearInterval(interval)
+        }
+      }, 250)
+
+      return () => {
+        clearInterval(interval)
+        cleanup?.()
+      }
+    }
+
+    return () => {
+      cleanup?.()
+    }
+  }, [executeSwap])
 
   if (result.status === 'idle') return null
 
