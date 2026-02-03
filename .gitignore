@@ -65,6 +65,8 @@ playwright/.cache/
 PLAN.md
 CONTEXT.md
 context.md
+WORKPLAN.md
+AUDIT.md
 
 # Large files
 *.mp4
