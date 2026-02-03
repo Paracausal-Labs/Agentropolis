@@ -2,8 +2,9 @@
 
 import { useReadContract } from 'wagmi'
 import { mainnet } from 'viem/chains'
-import { normalize } from 'viem/ens'
+import { normalize, namehash } from 'viem/ens'
 import { useMemo } from 'react'
+import { getEnsResolver, type WalletClient, type Address } from 'viem'
 
 /**
  * Agent configuration stored in ENS text records
@@ -168,4 +169,125 @@ export function parseAgentConfig(records: {
  */
 export function getDefaultAgentConfig(): AgentConfig {
   return { ...DEFAULT_AGENT_CONFIG }
+}
+
+/**
+ * Write agent configuration to ENS text records
+ * Requires user to own the ENS name
+ *
+ * @param ensName - ENS name (e.g., "alice.eth")
+ * @param config - Agent configuration to write
+ * @param walletClient - Wallet client for writing transactions
+ * @returns Transaction hash if successful
+ * @throws Error if user doesn't own the ENS name or transaction fails
+ */
+export async function writeAgentConfig(
+  ensName: string,
+  config: Partial<AgentConfig>,
+  walletClient: WalletClient
+): Promise<string> {
+  if (!walletClient.account?.address) {
+    throw new Error('Wallet not connected')
+  }
+
+  try {
+    const normalized = normalize(ensName)
+    const hash = namehash(normalized)
+
+    const resolver = await getEnsResolver(walletClient, {
+      name: normalized,
+    })
+
+    if (!resolver) {
+      throw new Error(`No resolver found for ${ensName}`)
+    }
+
+    const writes: Array<{
+      key: string
+      value: string
+    }> = []
+
+    if (config.risk) {
+      writes.push({
+        key: TEXT_RECORD_KEYS.RISK,
+        value: config.risk,
+      })
+    }
+
+    if (config.strategy) {
+      writes.push({
+        key: TEXT_RECORD_KEYS.STRATEGY,
+        value: config.strategy,
+      })
+    }
+
+    if (config.tokens && config.tokens.length > 0) {
+      writes.push({
+        key: TEXT_RECORD_KEYS.TOKENS,
+        value: config.tokens.join(','),
+      })
+    }
+
+    if (config.agentEndpoint) {
+      writes.push({
+        key: TEXT_RECORD_KEYS.ENDPOINT,
+        value: config.agentEndpoint,
+      })
+    }
+
+    if (writes.length === 0) {
+      throw new Error('No configuration values to write')
+    }
+
+    const RESOLVER_ABI = [
+      {
+        type: 'function',
+        name: 'setText',
+        stateMutability: 'nonpayable',
+        inputs: [
+          { name: 'node', type: 'bytes32' },
+          { name: 'key', type: 'string' },
+          { name: 'value', type: 'string' },
+        ],
+        outputs: [],
+      },
+    ] as const
+
+    let lastTxHash = ''
+
+    for (const write of writes) {
+      try {
+        const txHash = await walletClient.writeContract({
+          address: resolver as Address,
+          abi: RESOLVER_ABI,
+          functionName: 'setText',
+          args: [hash, write.key, write.value],
+          account: walletClient.account.address,
+          chain: walletClient.chain ?? null,
+        })
+
+        lastTxHash = txHash
+        console.info(`[ens] wrote text record ${write.key}:`, txHash)
+      } catch (error) {
+        console.error(`[ens] failed to write ${write.key}:`, error)
+      }
+    }
+
+    if (!lastTxHash) {
+      throw new Error('Failed to write any text records')
+    }
+
+    return lastTxHash
+  } catch (error) {
+    if (error instanceof Error) {
+      if (
+        error.message.includes('Unauthorized') ||
+        error.message.includes('not authorized') ||
+        error.message.includes('caller is not authorized')
+      ) {
+        throw new Error(`You do not own the ENS name "${ensName}"`)
+      }
+    }
+    throw error
+  }
 }
