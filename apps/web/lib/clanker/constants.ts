@@ -1,0 +1,25 @@
+export const CLANKER_CONTRACTS = {
+  SEPOLIA: {
+    FACTORY: '0xE85A59c628F7d27878ACeB4bf3b35733630083a9' as const,
+    FEE_LOCKER: '0x42A95190B4088C88Dd904d930c79deC1158bF09D' as const,
+    HOOK_STATIC_FEE_V2: '0x11b51DBC2f7F683b81CeDa83DC0078D57bA328cc' as const,
+  },
+  MAINNET: {
+    FACTORY: '0xf9a0c289eab6b571c6247094a853810987e5b26d' as const,
+    HOOK_STATIC_FEE_V2: '0x94F802a9EFE4dd542FdBd77a25D9e69A6dC828Cc' as const,
+    VAULT: '0xe7D402A5BEd94E5c49Ac0639E80f784D06E2D397' as const,
+    FEE_LOCKER: '0x46B77BaCFd712D79131F1AD7611794869483C353' as const,
+    CLAWNCH_TOKEN: '0xa1F72459dfA10BAD200Ac160eCd78C6b77a747be' as const,
+  },
+} as const
+
+export const CLANKER_URLS = {
+  CLANKER_WORLD: 'https://clanker.world/clanker',
+  CLAWNCH: 'https://clawn.ch',
+  DEXSCREENER: 'https://dexscreener.com/base',
+} as const
+
+export const FEE_CONFIG = {
+  AGENT_BPS: 8000,
+  PLATFORM_BPS: 2000,
+} as const

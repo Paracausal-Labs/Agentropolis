@@ -21,7 +21,7 @@ export interface DeliberationResult {
 }
 
 // Strategy types for proposals
-export type StrategyType = 'swap' | 'dca' | 'lp_full_range' | 'lp_concentrated'
+export type StrategyType = 'swap' | 'dca' | 'lp_full_range' | 'lp_concentrated' | 'token_launch'
 
 export interface TradeProposal {
   id: string
@@ -45,6 +45,35 @@ export interface TradeProposal {
   tickUpper?: number
   // Multi-agent deliberation
   deliberation?: DeliberationResult
+}
+
+export interface TokenLaunchProposal {
+  id: string
+  agentId: string
+  agentName: string
+  action: 'token_launch'
+  strategyType: 'token_launch'
+  tokenName: string
+  tokenSymbol: string
+  tokenDescription: string
+  tokenImage?: string
+  pairedToken: string
+  rewardRecipient: string
+  rewardBps: number
+  vaultPercentage?: number
+  lockupDays?: number
+  reasoning: string
+  confidence: number
+  riskLevel: 'low' | 'medium' | 'high'
+  deliberation?: DeliberationResult
+}
+
+export interface TokenLaunchResult {
+  success: boolean
+  txHash?: string
+  tokenAddress?: string
+  clankerUrl?: string
+  error?: string
 }
 
 export interface AgentProfile {
