@@ -22,6 +22,9 @@
         "@wagmi/core": "^3.3.1",
         "@walletconnect/ethereum-provider": "^2.23.4",
         "@walletconnect/modal": "^2.7.0",
+        "@x402/core": "^2.2.0",
+        "@x402/evm": "^2.2.0",
+        "@x402/fetch": "^2.2.0",
         "clanker-sdk": "^4.2.10",
         "class-variance-authority": "^0.7.0",
         "clsx": "^2.0.0",
@@ -495,6 +498,12 @@
     "@walletconnect/window-getters": ["@walletconnect/window-getters@1.0.1", "", { "dependencies": { "tslib": "1.14.1" } }, "sha512-vHp+HqzGxORPAN8gY03qnbTMnhqIwjeRJNOMOAzePRg4xVEEE2WvYsI9G2NMjOknA8hnuYbU3/hwLcKbjhc8+Q=="],
 
     "@walletconnect/window-metadata": ["@walletconnect/window-metadata@1.0.1", "", { "dependencies": { "@walletconnect/window-getters": "^1.0.1", "tslib": "1.14.1" } }, "sha512-9koTqyGrM2cqFRW517BPY/iEtUDx2r1+Pwwu5m7sJ7ka79wi3EyqhqcICk/yDmv6jAS1rjKgTKXlEhanYjijcA=="],
+
+    "@x402/core": ["@x402/core@2.2.0", "", { "dependencies": { "zod": "^3.24.2" } }, "sha512-UyPX7UVrqCyFTMeDWAx9cn9LvcaRlUoAknSehuxJ07vXLVhC7Wx5R1h2CV12YkdB+hE6K48Qvfd4qrvbpqqYfw=="],
+
+    "@x402/evm": ["@x402/evm@2.2.0", "", { "dependencies": { "@x402/core": "^2.2.0", "viem": "^2.39.3", "zod": "^3.24.2" } }, "sha512-fJaIS97Ir+ykkxLUdI+/cFiQFyruWukJbZ3PLo8518n6IKP9B7HqsJ1cUMRWd/fHFXNqOEAo6tKFW4wHKOxd2A=="],
+
+    "@x402/fetch": ["@x402/fetch@2.2.0", "", { "dependencies": { "@x402/core": "^2.2.0", "viem": "^2.39.3", "zod": "^3.24.2" } }, "sha512-oSn3jVe03rJaqbgMA33LrKFBbzelVfMtjLcE/9WIaTB0K/NLPo8xWDLMkiI9yRlaEO7sXvpMfSCDrRdkjf33gA=="],
 
     "abitype": ["abitype@1.2.3", "", { "peerDependencies": { "typescript": ">=5.0.4", "zod": "^3.22.0 || ^4.0.0" }, "optionalPeers": ["typescript", "zod"] }, "sha512-Ofer5QUnuUdTFsBRwARMoWKOH1ND5ehwYhJ3OJ/BQO+StkwQjHw0XyVh4vDttzHB7QOFhPHa/o413PJ82gU/Tg=="],
 
