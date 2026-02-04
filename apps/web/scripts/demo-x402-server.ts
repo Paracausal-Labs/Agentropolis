@@ -18,9 +18,7 @@
  *     -d '{"prompt":"swap 0.1 ETH to USDC","context":{"balance":"1 ETH"},"requestId":"test-1"}'
  */
 
-// @ts-expect-error - Express CommonJS default export
 import express from 'express'
-// @ts-expect-error - CORS CommonJS default export
 import cors from 'cors'
 import type { ExternalAgentRequest, ExternalAgentResponse, TradeProposal } from '@agentropolis/shared'
 
