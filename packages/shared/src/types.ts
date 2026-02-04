@@ -1,3 +1,28 @@
+// Council Agent Roles
+export type AgentRole = 'alpha' | 'risk' | 'macro' | 'devil' | 'clerk'
+
+// Council Message from deliberation
+export interface CouncilMessage {
+  agentId: string
+  agentName: string
+  agentRole: AgentRole
+  opinion: 'SUPPORT' | 'CONCERN' | 'OPPOSE' | 'NEUTRAL'
+  reasoning: string
+  confidence: number // 0-100
+  timestamp: number
+}
+
+// Result of council deliberation
+export interface DeliberationResult {
+  messages: CouncilMessage[]
+  consensus: 'unanimous' | 'majority' | 'contested' | 'vetoed'
+  voteTally: { support: number; oppose: number; abstain: number }
+  rounds: number
+}
+
+// Strategy types for proposals
+export type StrategyType = 'swap' | 'dca' | 'lp_full_range' | 'lp_concentrated'
+
 export interface TradeProposal {
   id: string
   agentId: string
@@ -7,6 +32,7 @@ export interface TradeProposal {
     tokenOut: { symbol: string; address: string }
   }
   action: 'swap' | 'rebalance' | 'dca'
+  strategyType?: StrategyType
   amountIn: string
   expectedAmountOut: string
   maxSlippage: number
@@ -14,6 +40,11 @@ export interface TradeProposal {
   reasoning: string
   confidence: number
   riskLevel: 'low' | 'medium' | 'high'
+  // LP-specific fields
+  tickLower?: number
+  tickUpper?: number
+  // Multi-agent deliberation
+  deliberation?: DeliberationResult
 }
 
 export interface AgentProfile {
