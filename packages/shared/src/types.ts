@@ -84,6 +84,29 @@ export interface AgentProfile {
   strategy: 'momentum' | 'dca' | 'arbitrage' | 'yield'
   riskTolerance: 'conservative' | 'moderate' | 'aggressive'
   services: { name: string; endpoint: string; version: string }[]
+  // ERC-8004 additions
+  reputation?: number // 0-100 scale from reputation registry
+  registrySource?: 'erc8004' | 'mock' // Track if from real registry or mock
+  serviceEndpoint?: string // External agent endpoint URL
+}
+
+// External Agent Protocol (BYOA)
+export interface ExternalAgentRequest {
+  prompt: string
+  context: {
+    balance?: string
+    riskLevel?: 'low' | 'medium' | 'high'
+    preferredTokens?: string[]
+  }
+  requestId: string
+}
+
+export interface ExternalAgentResponse {
+  success: boolean
+  proposal?: TradeProposal | TokenLaunchProposal
+  error?: string
+  processingTime?: number
+  paymentTxHash?: string // x402 payment transaction if applicable
 }
 
 export interface YellowSession {
