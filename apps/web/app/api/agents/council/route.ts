@@ -85,9 +85,14 @@ async function handleDeliberation(request: NextRequest): Promise<NextResponse> {
         riskLevel: body.context?.riskLevel || 'medium',
       },
       deployedAgents: body.deployedAgents,
+      agentEndpoint: body.agentEndpoint,
     }
 
     const walletAddress = body.walletAddress || '0x0000000000000000000000000000000000000000'
+    
+    if (body.agentEndpoint) {
+      console.log('[API] External agent endpoint configured:', body.agentEndpoint)
+    }
     
     const result = isTokenLaunchPrompt(userPrompt)
       ? await runTokenLaunchDeliberation(councilRequest, walletAddress)

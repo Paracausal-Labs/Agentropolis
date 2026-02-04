@@ -6,6 +6,8 @@ import type {
   DeliberationResult,
   AgentRole,
   StrategyType,
+  ExternalAgentRequest,
+  ExternalAgentResponse,
 } from '@agentropolis/shared'
 import { TOKENS } from '../uniswap/constants'
 import { FEE_CONFIG } from '../clanker/constants'
@@ -83,6 +85,62 @@ export interface CouncilRequest {
   userPrompt: string
   context: StrategyContext
   deployedAgents?: Array<{ id: string; name: string }>
+  agentEndpoint?: string
+}
+
+async function callExternalAgent(
+  endpoint: string,
+  request: ExternalAgentRequest,
+  x402Fetch?: typeof fetch
+): Promise<ExternalAgentResponse> {
+  const fetcher = x402Fetch || fetch
+  
+  try {
+    console.log('[Council] Calling external agent:', endpoint)
+    
+    const response = await fetcher(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    })
+
+    if (!response.ok) {
+      throw new Error(`External agent error: ${response.status}`)
+    }
+
+    const data = await response.json()
+    console.log('[Council] External agent response received')
+    
+    const paymentTx = response.headers.get('X-Payment-Response')
+    if (paymentTx) {
+      console.log('[Council] x402 payment settled:', paymentTx)
+      return { ...data, paymentTxHash: paymentTx } as ExternalAgentResponse
+    }
+
+    return data as ExternalAgentResponse
+  } catch (error) {
+    console.error('[Council] External agent failed:', error)
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    }
+  }
+}
+
+function convertExternalProposal(
+  proposal: TradeProposal | TokenLaunchProposal,
+  messages: CouncilMessage[]
+): { deliberation: DeliberationResult; proposal: TradeProposal } {
+  const { consensus, voteTally } = calculateConsensus(messages)
+  
+  const tradeProposal = proposal as TradeProposal
+  return {
+    deliberation: { messages, consensus, voteTally, rounds: 1 },
+    proposal: {
+      ...tradeProposal,
+      deliberation: { messages, consensus, voteTally, rounds: 1 },
+    },
+  }
 }
 
 interface AgentResponse {
@@ -576,8 +634,48 @@ function getMockDeliberation(userPrompt: string): {
 }
 
 export async function runCouncilDeliberation(
-  request: CouncilRequest
+  request: CouncilRequest,
+  x402Fetch?: typeof fetch
 ): Promise<{ deliberation: DeliberationResult; proposal: TradeProposal }> {
+  
+  if (request.agentEndpoint) {
+    console.log('[Council] External endpoint configured, trying external agent first')
+    
+    const externalRequest: ExternalAgentRequest = {
+      prompt: request.userPrompt,
+      context: {
+        balance: request.context.balance,
+        riskLevel: request.context.riskLevel,
+        preferredTokens: request.context.preferredTokens,
+      },
+      requestId: `req-${Date.now()}`,
+    }
+    
+    const externalResult = await callExternalAgent(
+      request.agentEndpoint,
+      externalRequest,
+      x402Fetch
+    )
+    
+    if (externalResult.success && externalResult.proposal) {
+      console.log('[Council] Using external agent proposal')
+      
+      const externalMessage: CouncilMessage = {
+        agentId: 'external-agent',
+        agentName: 'External Agent',
+        agentRole: 'clerk',
+        opinion: 'SUPPORT',
+        reasoning: `Proposal from external agent at ${request.agentEndpoint}`,
+        confidence: 85,
+        timestamp: Date.now(),
+      }
+      
+      return convertExternalProposal(externalResult.proposal, [externalMessage])
+    }
+    
+    console.warn('[Council] External agent failed, falling back to Groq:', externalResult.error)
+  }
+  
   const isMockMode = process.env.GROQ_MOCK === 'true'
   const apiKey = process.env.GROQ_API_KEY
 
