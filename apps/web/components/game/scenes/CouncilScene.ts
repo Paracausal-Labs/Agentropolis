@@ -1,8 +1,25 @@
 import Phaser from 'phaser'
+import type { CouncilMessage, DeliberationResult } from '@agentropolis/shared'
+
+const AGENT_EMOJIS: Record<string, string> = {
+  alpha: '🎯',
+  risk: '🛡️',
+  macro: '🔮',
+  devil: '😈',
+  clerk: '📋',
+}
+
+const OPINION_COLORS: Record<string, number> = {
+  SUPPORT: 0x22c55e,
+  CONCERN: 0xeab308,
+  OPPOSE: 0xef4444,
+  NEUTRAL: 0x64748b,
+}
 
 interface AgentSeat {
   id: string
   name: string
+  role?: string
   x: number
   y: number
   sprite: Phaser.GameObjects.Container
@@ -17,14 +34,28 @@ interface Proposal {
   reasoning: string
   confidence: number
   riskLevel: string
+  strategyType?: string
+  deliberation?: DeliberationResult
 }
+
+const PRESET_PROMPTS = [
+  { label: '💰 Passive Income', prompt: 'I want passive income from my 0.1 ETH' },
+  { label: '🔄 Simple Swap', prompt: 'Swap 0.05 ETH to USDC' },
+  { label: '📈 High Yield LP', prompt: 'Provide liquidity for maximum yield' },
+  { label: '🛡️ Safe Strategy', prompt: 'What is the safest DeFi strategy for my ETH?' },
+]
 
 export class CouncilScene extends Phaser.Scene {
   private seats: AgentSeat[] = []
+  private councilSeats: AgentSeat[] = []
   private currentProposal: Proposal | null = null
   private proposalCard: Phaser.GameObjects.Container | null = null
   private approveBtn: Phaser.GameObjects.Container | null = null
   private rejectBtn: Phaser.GameObjects.Container | null = null
+  private currentBubble: Phaser.GameObjects.Container | null = null
+  private isDeliberating = false
+  private loadingText: Phaser.GameObjects.Text | null = null
+  private promptSelector: Phaser.GameObjects.Container | null = null
 
   constructor() {
     super({ key: 'CouncilScene' })
@@ -61,7 +92,7 @@ export class CouncilScene extends Phaser.Scene {
     this.placeSeats(centerX, centerY - 50)
     this.createProposalCard(centerX, centerY + 180)
     this.createBackButton()
-    this.fetchProposal()
+    this.createPromptSelector(centerX, centerY + 120)
 
     if (typeof window !== 'undefined') {
       (window as any).game = this.game
@@ -86,39 +117,51 @@ export class CouncilScene extends Phaser.Scene {
   }
 
   private placeSeats(tableX: number, tableY: number) {
-    const seatPositions = [
-      { angle: -90, distance: 220, label: 'YOU' },
-      { angle: -45, distance: 200, label: '' },
-      { angle: 0, distance: 190, label: '' },
-      { angle: 45, distance: 200, label: '' },
-      { angle: 90, distance: 220, label: '' },
-      { angle: 135, distance: 200, label: '' },
-      { angle: 180, distance: 190, label: '' },
-      { angle: 225, distance: 200, label: '' },
+    const councilAgents = [
+      { role: 'alpha', name: 'Alpha Hunter' },
+      { role: 'risk', name: 'Risk Sentinel' },
+      { role: 'macro', name: 'Macro Oracle' },
+      { role: 'devil', name: "Devil's Advocate" },
+      { role: 'clerk', name: 'Council Clerk' },
     ]
+
+    const seatPositions = [
+      { angle: -90, distance: 220, label: 'YOU', role: 'user' },
+      { angle: -45, distance: 200, label: councilAgents[0].name, role: councilAgents[0].role },
+      { angle: 0, distance: 190, label: councilAgents[1].name, role: councilAgents[1].role },
+      { angle: 45, distance: 200, label: councilAgents[2].name, role: councilAgents[2].role },
+      { angle: 90, distance: 220, label: councilAgents[3].name, role: councilAgents[3].role },
+      { angle: 180, distance: 190, label: councilAgents[4].name, role: councilAgents[4].role },
+    ]
+
+    this.councilSeats = []
 
     seatPositions.forEach((pos, i) => {
       const radians = (pos.angle * Math.PI) / 180
       const x = tableX + Math.cos(radians) * pos.distance
       const y = tableY + Math.sin(radians) * (pos.distance * 0.45)
-      
+
       const isUser = i === 0
-      const agent = this.seats[i - 1]
-      
-      const seat = this.createSeatSprite(x, y, isUser, agent?.name || pos.label)
-      
-      if (agent) {
-        agent.x = x
-        agent.y = y
-        agent.sprite = seat
+      const emoji = isUser ? '👤' : AGENT_EMOJIS[pos.role] || '🤖'
+      const seat = this.createSeatSprite(x, y, isUser, pos.label, emoji)
+
+      if (!isUser) {
+        this.councilSeats.push({
+          id: pos.role,
+          name: pos.label,
+          role: pos.role,
+          x,
+          y,
+          sprite: seat,
+        })
       }
     })
   }
 
-  private createSeatSprite(x: number, y: number, isUser: boolean, name: string): Phaser.GameObjects.Container {
+  private createSeatSprite(x: number, y: number, isUser: boolean, name: string, emoji = '🤖'): Phaser.GameObjects.Container {
     const container = this.add.container(x, y)
     const graphics = this.add.graphics()
-    
+
     if (isUser) {
       graphics.fillStyle(0x3b82f6, 1)
     } else if (name) {
@@ -126,30 +169,30 @@ export class CouncilScene extends Phaser.Scene {
     } else {
       graphics.fillStyle(0x374151, 0.5)
     }
-    
+
     graphics.fillCircle(0, 0, 25)
-    
+
     if (name) {
       graphics.lineStyle(2, isUser ? 0x60a5fa : 0x475569)
       graphics.strokeCircle(0, 0, 25)
     }
-    
+
     container.add(graphics)
-    
+
     if (name) {
-      const icon = this.add.text(0, -2, isUser ? '👤' : '🤖', {
+      const icon = this.add.text(0, -2, emoji, {
         fontSize: '20px',
       }).setOrigin(0.5)
       container.add(icon)
-      
-      const label = this.add.text(0, 35, name.substring(0, 12), {
-        fontSize: '11px',
+
+      const label = this.add.text(0, 35, name.substring(0, 14), {
+        fontSize: '10px',
         color: isUser ? '#60a5fa' : '#94a3b8',
         fontFamily: 'Arial',
       }).setOrigin(0.5)
       container.add(label)
     }
-    
+
     return container
   }
 
@@ -223,38 +266,331 @@ export class CouncilScene extends Phaser.Scene {
       color: '#94a3b8',
       fontFamily: 'Arial',
     }).setInteractive()
-    
+
     btn.on('pointerover', () => {
       btn.setColor('#ffffff')
       this.input.setDefaultCursor('pointer')
     })
-    
+
     btn.on('pointerout', () => {
       btn.setColor('#94a3b8')
       this.input.setDefaultCursor('default')
     })
-    
+
     btn.on('pointerdown', () => {
       this.scene.start('CityScene')
     })
   }
 
-  private async fetchProposal() {
+  private createPromptSelector(x: number, y: number) {
+    this.promptSelector = this.add.container(x, y)
+
+    const title = this.add.text(0, -60, '🎯 What would you like the Council to discuss?', {
+      fontSize: '14px',
+      color: '#fbbf24',
+      fontFamily: 'Arial',
+      fontStyle: 'bold',
+    }).setOrigin(0.5)
+    this.promptSelector.add(title)
+
+    PRESET_PROMPTS.forEach((preset, i) => {
+      const btnX = (i % 2 === 0 ? -1 : 1) * 130
+      const btnY = Math.floor(i / 2) * 45 - 15
+
+      const btn = this.createPromptButton(btnX, btnY, preset.label, () => {
+        this.hidePromptSelector()
+        this.runDeliberation(preset.prompt)
+      })
+      this.promptSelector!.add(btn)
+    })
+  }
+
+  private createPromptButton(x: number, y: number, label: string, onClick: () => void): Phaser.GameObjects.Container {
+    const container = this.add.container(x, y)
+    const width = 240
+    const height = 36
+
+    const bg = this.add.graphics()
+    bg.fillStyle(0x1e293b, 1)
+    bg.fillRoundedRect(-width / 2, -height / 2, width, height, 8)
+    bg.lineStyle(1, 0x475569)
+    bg.strokeRoundedRect(-width / 2, -height / 2, width, height, 8)
+    container.add(bg)
+
+    const text = this.add.text(0, 0, label, {
+      fontSize: '13px',
+      color: '#e2e8f0',
+      fontFamily: 'Arial',
+    }).setOrigin(0.5)
+    container.add(text)
+
+    container.setInteractive(new Phaser.Geom.Rectangle(-width / 2, -height / 2, width, height), Phaser.Geom.Rectangle.Contains)
+
+    container.on('pointerover', () => {
+      bg.clear()
+      bg.fillStyle(0x334155, 1)
+      bg.fillRoundedRect(-width / 2, -height / 2, width, height, 8)
+      bg.lineStyle(1, 0xfbbf24)
+      bg.strokeRoundedRect(-width / 2, -height / 2, width, height, 8)
+      this.input.setDefaultCursor('pointer')
+    })
+
+    container.on('pointerout', () => {
+      bg.clear()
+      bg.fillStyle(0x1e293b, 1)
+      bg.fillRoundedRect(-width / 2, -height / 2, width, height, 8)
+      bg.lineStyle(1, 0x475569)
+      bg.strokeRoundedRect(-width / 2, -height / 2, width, height, 8)
+      this.input.setDefaultCursor('default')
+    })
+
+    container.on('pointerdown', onClick)
+
+    return container
+  }
+
+  private hidePromptSelector() {
+    if (this.promptSelector) {
+      this.tweens.add({
+        targets: this.promptSelector,
+        alpha: 0,
+        duration: 200,
+        onComplete: () => {
+          this.promptSelector?.setVisible(false)
+        },
+      })
+    }
+  }
+
+  private showPromptSelector() {
+    if (this.promptSelector) {
+      this.promptSelector.setVisible(true)
+      this.promptSelector.setAlpha(0)
+      this.tweens.add({
+        targets: this.promptSelector,
+        alpha: 1,
+        duration: 200,
+      })
+    }
+  }
+
+  private showSpeechBubble(seat: AgentSeat, message: CouncilMessage): Promise<void> {
+    return new Promise((resolve) => {
+      if (this.currentBubble) {
+        this.currentBubble.destroy()
+        this.currentBubble = null
+      }
+
+      const bubbleWidth = 220
+      const bubbleHeight = 80
+      const bubbleX = seat.x
+      const bubbleY = seat.y - 70
+
+      const container = this.add.container(bubbleX, bubbleY)
+      container.setAlpha(0)
+      container.setScale(0.5)
+
+      const bg = this.add.graphics()
+      const opinionColor = OPINION_COLORS[message.opinion] || 0x64748b
+      bg.fillStyle(0x1e293b, 0.95)
+      bg.fillRoundedRect(-bubbleWidth / 2, -bubbleHeight / 2, bubbleWidth, bubbleHeight, 10)
+      bg.lineStyle(2, opinionColor)
+      bg.strokeRoundedRect(-bubbleWidth / 2, -bubbleHeight / 2, bubbleWidth, bubbleHeight, 10)
+
+      bg.fillStyle(0x1e293b, 0.95)
+      bg.fillTriangle(0, bubbleHeight / 2, -10, bubbleHeight / 2 + 15, 10, bubbleHeight / 2)
+      bg.lineStyle(2, opinionColor)
+      bg.lineBetween(-10, bubbleHeight / 2 + 15, 0, bubbleHeight / 2)
+      bg.lineBetween(10, bubbleHeight / 2 + 15, 0, bubbleHeight / 2)
+
+      container.add(bg)
+
+      const emoji = AGENT_EMOJIS[message.agentRole] || '🤖'
+      const header = this.add.text(-bubbleWidth / 2 + 10, -bubbleHeight / 2 + 8, `${emoji} ${message.agentName}`, {
+        fontSize: '11px',
+        color: '#fbbf24',
+        fontFamily: 'Arial',
+        fontStyle: 'bold',
+      })
+      container.add(header)
+
+      const badge = this.add.graphics()
+      badge.fillStyle(opinionColor, 1)
+      badge.fillRoundedRect(bubbleWidth / 2 - 60, -bubbleHeight / 2 + 6, 50, 16, 4)
+      container.add(badge)
+
+      const opinionText = this.add.text(bubbleWidth / 2 - 35, -bubbleHeight / 2 + 8, message.opinion, {
+        fontSize: '9px',
+        color: '#ffffff',
+        fontFamily: 'Arial',
+        fontStyle: 'bold',
+      }).setOrigin(0.5, 0)
+      container.add(opinionText)
+
+      const truncatedReason = message.reasoning.length > 70 ? message.reasoning.substring(0, 67) + '...' : message.reasoning
+      const reasonText = this.add.text(0, 5, truncatedReason, {
+        fontSize: '10px',
+        color: '#94a3b8',
+        fontFamily: 'Arial',
+        wordWrap: { width: bubbleWidth - 20 },
+        align: 'center',
+      }).setOrigin(0.5)
+      container.add(reasonText)
+
+      this.currentBubble = container
+
+      this.tweens.add({
+        targets: container,
+        alpha: 1,
+        scale: 1,
+        duration: 250,
+        ease: 'Back.easeOut',
+      })
+
+      this.time.delayedCall(2500, () => {
+        if (this.currentBubble === container) {
+          this.tweens.add({
+            targets: container,
+            alpha: 0,
+            scale: 0.8,
+            duration: 200,
+            onComplete: () => {
+              container.destroy()
+              if (this.currentBubble === container) {
+                this.currentBubble = null
+              }
+              resolve()
+            },
+          })
+        } else {
+          resolve()
+        }
+      })
+    })
+  }
+
+  private async runDeliberation(prompt: string) {
+    if (this.isDeliberating) return
+    this.isDeliberating = true
+
+    if (this.loadingText) {
+      this.loadingText.destroy()
+    }
+
+    const centerX = this.cameras.main.width / 2
+    this.loadingText = this.add.text(centerX, this.cameras.main.height / 2 + 100, '🔮 Council is deliberating...', {
+      fontSize: '16px',
+      color: '#fbbf24',
+      fontFamily: 'Arial',
+    }).setOrigin(0.5)
+
+    this.tweens.add({
+      targets: this.loadingText,
+      alpha: { from: 1, to: 0.5 },
+      duration: 600,
+      yoyo: true,
+      repeat: -1,
+    })
+
     try {
-      const res = await fetch('/api/agents/propose', {
+      const res = await fetch('/api/agents/council', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          agentId: this.seats[0]?.id || '1',
-          context: { balance: '1 ETH', riskLevel: 'medium' },
+          userPrompt: prompt,
+          context: { balance: '0.1 ETH', riskLevel: 'medium' },
         }),
       })
-      
-      const proposal = await res.json()
-      this.displayProposal(proposal)
+
+      const data = await res.json()
+
+      if (!data.success || !data.deliberation) {
+        throw new Error('Invalid council response')
+      }
+
+      if (this.loadingText) {
+        this.loadingText.destroy()
+        this.loadingText = null
+      }
+
+      const messages = data.deliberation.messages as CouncilMessage[]
+
+      for (const message of messages) {
+        const seat = this.councilSeats.find((s) => s.role === message.agentRole)
+        if (seat) {
+          await this.showSpeechBubble(seat, message)
+          await this.delay(300)
+        }
+      }
+
+      if (this.currentBubble) {
+        this.currentBubble.destroy()
+        this.currentBubble = null
+      }
+
+      this.showConsensus(data.deliberation)
+      await this.delay(1500)
+      this.displayProposal(data.proposal)
     } catch (err) {
-      console.error('[CouncilScene] Failed to fetch proposal:', err)
+      console.error('[CouncilScene] Deliberation failed:', err)
+      if (this.loadingText) {
+        this.loadingText.setText('❌ Deliberation failed. Retrying...')
+        this.time.delayedCall(2000, () => {
+          this.isDeliberating = false
+          this.runDeliberation(prompt)
+        })
+      }
     }
+
+    this.isDeliberating = false
+  }
+
+  private showConsensus(deliberation: DeliberationResult) {
+    const centerX = this.cameras.main.width / 2
+    const centerY = this.cameras.main.height / 2
+
+    const consensusColors: Record<string, number> = {
+      unanimous: 0x22c55e,
+      majority: 0x3b82f6,
+      contested: 0xeab308,
+      vetoed: 0xef4444,
+    }
+
+    const color = consensusColors[deliberation.consensus] || 0x64748b
+    const { support, oppose, abstain } = deliberation.voteTally
+
+    const text = this.add.text(
+      centerX,
+      centerY - 50,
+      `${deliberation.consensus.toUpperCase()}\n${support} support · ${oppose} oppose · ${abstain} abstain`,
+      {
+        fontSize: '20px',
+        color: Phaser.Display.Color.IntegerToColor(color).rgba,
+        fontFamily: 'Arial',
+        fontStyle: 'bold',
+        align: 'center',
+      }
+    ).setOrigin(0.5)
+
+    text.setAlpha(0)
+    this.tweens.add({
+      targets: text,
+      alpha: 1,
+      duration: 300,
+    })
+
+    this.time.delayedCall(1500, () => {
+      this.tweens.add({
+        targets: text,
+        alpha: 0,
+        duration: 300,
+        onComplete: () => text.destroy(),
+      })
+    })
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => this.time.delayedCall(ms, resolve))
   }
 
   private displayProposal(proposal: Proposal) {
@@ -374,19 +710,28 @@ export class CouncilScene extends Phaser.Scene {
 
   private handleReject() {
     if (!this.currentProposal) return
-    
+
     console.log('[CouncilScene] Proposal rejected:', this.currentProposal.id)
     this.game.events.emit('proposalRejected', this.currentProposal)
-    
+
     this.showResult('✗ Rejected', 0xef4444)
-    
-    this.time.delayedCall(1500, () => this.fetchProposal())
+    this.time.delayedCall(1500, () => this.resetForNewDiscussion())
+  }
+
+  private resetForNewDiscussion() {
+    this.currentProposal = null
+    if (this.proposalCard) {
+      this.proposalCard.setVisible(false)
+    }
+    this.approveBtn?.setVisible(false)
+    this.rejectBtn?.setVisible(false)
+    this.showPromptSelector()
   }
 
   private showResult(message: string, color: number) {
     this.approveBtn?.setVisible(false)
     this.rejectBtn?.setVisible(false)
-    
+
     const resultText = this.add.text(
       this.cameras.main.width / 2,
       this.cameras.main.height / 2 + 230,
@@ -398,7 +743,7 @@ export class CouncilScene extends Phaser.Scene {
         fontStyle: 'bold',
       }
     ).setOrigin(0.5)
-    
+
     this.time.delayedCall(2000, () => {
       resultText.destroy()
     })
