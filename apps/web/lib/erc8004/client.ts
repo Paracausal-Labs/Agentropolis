@@ -1,12 +1,13 @@
 import { createPublicClient, http } from 'viem'
-import { mainnet } from 'viem/chains'
+import { baseSepolia } from 'viem/chains'
 import type { AgentProfile } from '@agentropolis/shared'
 
-// ERC-8004 Identity Registry address on Ethereum mainnet
-const REGISTRY_ADDRESS = '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432' as const
+const BASE_SEPOLIA_RPC = 'https://sepolia.base.org'
 
-// Minimal ERC-8004 registry ABI for querying agent metadata
-const REGISTRY_ABI = [
+const IDENTITY_REGISTRY_ADDRESS = '0x8004A818BFB912233c491871b3d84c89A494BD9e' as const
+const REPUTATION_REGISTRY_ADDRESS = '0x8004B663056A597Dffe9eCcC1965A193B7388713' as const
+
+const IDENTITY_REGISTRY_ABI = [
   {
     inputs: [{ name: 'id', type: 'uint256' }],
     name: 'getMetadataURI',
@@ -23,15 +24,27 @@ const REGISTRY_ABI = [
   },
 ] as const
 
+const REPUTATION_REGISTRY_ABI = [
+  {
+    inputs: [{ name: 'agentId', type: 'uint256' }],
+    name: 'getSummary',
+    outputs: [
+      { name: 'totalFeedback', type: 'uint256' },
+      { name: 'averageValue', type: 'int128' },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const
+
 export interface ERC8004Config {
   mockMode?: boolean
   rpcUrl?: string
 }
 
-/**
- * Convert IPFS URI to gateway URL
- * e.g., ipfs://QmXxxx -> https://ipfs.io/ipfs/QmXxxx
- */
+export const ERC8004_CHAIN_ID = 84532
+export const ERC8004_REGISTRY_ADDRESS = IDENTITY_REGISTRY_ADDRESS
+
 function ipfsToGateway(uri: string): string {
   if (uri.startsWith('ipfs://')) {
     const hash = uri.replace('ipfs://', '')
@@ -40,10 +53,7 @@ function ipfsToGateway(uri: string): string {
   return uri
 }
 
-/**
- * Fetch and parse metadata from URI (IPFS or HTTP)
- */
-async function fetchMetadata(uri: string): Promise<Record<string, any>> {
+async function fetchMetadata(uri: string): Promise<Record<string, unknown>> {
   try {
     const url = ipfsToGateway(uri)
     const response = await fetch(url, { signal: AbortSignal.timeout(5000) })
@@ -55,13 +65,38 @@ async function fetchMetadata(uri: string): Promise<Record<string, any>> {
   }
 }
 
-/**
- * Query ERC-8004 registry for agent profiles
- */
+async function queryReputation(
+  rpcUrl: string,
+  agentId: number
+): Promise<number | undefined> {
+  try {
+    const client = createPublicClient({
+      chain: baseSepolia,
+      transport: http(rpcUrl),
+    })
+    
+    const result = await client.readContract({
+      address: REPUTATION_REGISTRY_ADDRESS,
+      abi: REPUTATION_REGISTRY_ABI,
+      functionName: 'getSummary',
+      args: [BigInt(agentId)],
+    })
+
+    const [totalFeedback, averageValue] = result as [bigint, bigint]
+
+    if (totalFeedback === 0n) return undefined
+
+    const normalizedScore = Math.min(100, Math.max(0, Number(averageValue) + 50))
+    return normalizedScore
+  } catch {
+    return undefined
+  }
+}
+
 export async function queryERC8004Registry(
   config: ERC8004Config = {}
 ): Promise<AgentProfile[]> {
-  const { mockMode = false, rpcUrl } = config
+  const { mockMode = false, rpcUrl = BASE_SEPOLIA_RPC } = config
 
   if (mockMode) {
     console.log('[ERC-8004] Running in mock mode')
@@ -70,33 +105,32 @@ export async function queryERC8004Registry(
 
   try {
     const client = createPublicClient({
-      chain: mainnet,
+      chain: baseSepolia,
       transport: http(rpcUrl),
     })
 
-    console.log('[ERC-8004] Querying registry at', REGISTRY_ADDRESS)
+    console.log('[ERC-8004] Querying Base Sepolia registry at', IDENTITY_REGISTRY_ADDRESS)
 
-    // Try to get total agents count
-    let totalAgents = 3n // Default to querying first 3
+    let totalAgents = 3n
     try {
       totalAgents = (await client.readContract({
-        address: REGISTRY_ADDRESS,
-        abi: REGISTRY_ABI,
+        address: IDENTITY_REGISTRY_ADDRESS,
+        abi: IDENTITY_REGISTRY_ABI,
         functionName: 'totalAgents',
       })) as bigint
       console.log(`[ERC-8004] Found ${totalAgents} agents in registry`)
-    } catch (error) {
+    } catch {
       console.warn('[ERC-8004] Could not query totalAgents, using default limit of 3')
     }
 
     const agents: AgentProfile[] = []
-    const limit = Math.min(Number(totalAgents), 10) // Query up to 10 agents
+    const limit = Math.min(Number(totalAgents), 10)
 
     for (let i = 0; i < limit; i++) {
       try {
         const metadataUri = (await client.readContract({
-          address: REGISTRY_ADDRESS,
-          abi: REGISTRY_ABI,
+          address: IDENTITY_REGISTRY_ADDRESS,
+          abi: IDENTITY_REGISTRY_ABI,
           functionName: 'getMetadataURI',
           args: [BigInt(i)],
         })) as string
@@ -104,16 +138,19 @@ export async function queryERC8004Registry(
         if (!metadataUri) continue
 
         const metadata = await fetchMetadata(metadataUri)
+        const reputation = await queryReputation(rpcUrl, i)
 
-        // Map metadata to AgentProfile
         const agent: AgentProfile = {
           agentId: i,
-          name: metadata.name || `Agent ${i}`,
-          description: metadata.description || 'No description',
-          image: metadata.image || 'https://via.placeholder.com/200',
-          strategy: metadata.strategy || 'momentum',
-          riskTolerance: metadata.riskTolerance || 'moderate',
-          services: metadata.services || [],
+          name: (metadata.name as string) || `Agent ${i}`,
+          description: (metadata.description as string) || 'No description',
+          image: (metadata.image as string) || 'https://via.placeholder.com/200',
+          strategy: (metadata.strategy as AgentProfile['strategy']) || 'momentum',
+          riskTolerance: (metadata.riskTolerance as AgentProfile['riskTolerance']) || 'moderate',
+          services: (metadata.services as AgentProfile['services']) || [],
+          reputation,
+          registrySource: 'erc8004',
+          serviceEndpoint: (metadata.serviceEndpoint as string) || (metadata.endpoint as string),
         }
 
         agents.push(agent)
@@ -130,9 +167,6 @@ export async function queryERC8004Registry(
   }
 }
 
-/**
- * Get agents with fallback to mocks
- */
 export async function getAgents(
   config: ERC8004Config = {}
 ): Promise<AgentProfile[]> {
@@ -144,10 +178,20 @@ export async function getAgents(
   }
 
   try {
-    return await queryERC8004Registry(config)
-  } catch (error) {
+    const agents = await queryERC8004Registry(config)
+    if (agents.length === 0) {
+      console.log('[ERC-8004] Registry empty, using mock agents')
+      const { getMockAgents } = await import('./mocks')
+      return getMockAgents()
+    }
+    return agents
+  } catch {
     console.warn('[ERC-8004] Falling back to mock agents due to query failure')
     const { getMockAgents } = await import('./mocks')
     return getMockAgents()
   }
+}
+
+export function get8004ScanUrl(agentId: number): string {
+  return `https://www.8004scan.io/agent/${ERC8004_CHAIN_ID}/${IDENTITY_REGISTRY_ADDRESS}/${agentId}`
 }

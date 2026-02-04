@@ -15,6 +15,8 @@ export const MOCK_AGENTS: AgentProfile[] = [
         version: '1.0.0',
       },
     ],
+    reputation: 85,
+    registrySource: 'mock',
   },
   {
     agentId: 1,
@@ -30,6 +32,8 @@ export const MOCK_AGENTS: AgentProfile[] = [
         version: '1.0.0',
       },
     ],
+    reputation: 72,
+    registrySource: 'mock',
   },
   {
     agentId: 2,
@@ -45,6 +49,8 @@ export const MOCK_AGENTS: AgentProfile[] = [
         version: '1.0.0',
       },
     ],
+    reputation: 91,
+    registrySource: 'mock',
   },
 ]
 
