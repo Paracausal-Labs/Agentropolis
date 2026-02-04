@@ -1,12 +1,14 @@
 import Groq from 'groq-sdk'
 import type {
   TradeProposal,
+  TokenLaunchProposal,
   CouncilMessage,
   DeliberationResult,
   AgentRole,
   StrategyType,
 } from '@agentropolis/shared'
 import { TOKENS } from '../uniswap/constants'
+import { FEE_CONFIG } from '../clanker/constants'
 import type { StrategyContext } from './strategies'
 
 interface AgentPersona {
@@ -110,9 +112,45 @@ interface ClerkSynthesis {
   tickUpper?: number
 }
 
+interface ClerkTokenSynthesis {
+  tokenName: string
+  tokenSymbol: string
+  tokenDescription: string
+  vaultPercentage: number
+  reasoning: string
+  confidence: number
+  riskLevel: 'low' | 'medium' | 'high'
+}
+
+const TOKEN_LAUNCH_KEYWORDS = [
+  'launch a token',
+  'launch token',
+  'create a token',
+  'create token',
+  'deploy a token',
+  'deploy token',
+  'launch a memecoin',
+  'launch memecoin',
+  'create a memecoin',
+  'create memecoin',
+  'make a token',
+  'make token',
+  'new token',
+  'token for',
+  'coin for',
+]
+
+function isTokenLaunchPrompt(prompt: string): boolean {
+  const lower = prompt.toLowerCase()
+  return TOKEN_LAUNCH_KEYWORDS.some(kw => lower.includes(kw))
+}
+
 function detectUserIntent(userPrompt: string): { strategy: StrategyType | null; hint: string } {
   const lower = userPrompt.toLowerCase()
   
+  if (isTokenLaunchPrompt(userPrompt)) {
+    return { strategy: 'token_launch', hint: 'User wants to LAUNCH A TOKEN. Use token_launch strategy.' }
+  }
   if (lower.includes('swap') || lower.includes('exchange') || lower.includes('convert') || lower.includes('trade')) {
     return { strategy: 'swap', hint: 'User explicitly wants a SWAP. Respect this intent.' }
   }
@@ -180,6 +218,82 @@ Respond with JSON:
     "amountIn": "amount as string",
     "expectedReturn": "expected APY or output"
   }
+}`
+}
+
+function buildTokenLaunchAgentPrompt(
+  persona: AgentPersona,
+  userPrompt: string,
+  context: StrategyContext,
+  previousMessages: CouncilMessage[]
+): string {
+  const prevContext =
+    previousMessages.length > 0
+      ? `\n\nPrevious council discussion:\n${previousMessages
+          .map((m) => `${m.agentName} (${m.opinion}): ${m.reasoning}`)
+          .join('\n')}`
+      : ''
+
+  return `${persona.systemPrompt}
+
+User wants to launch a token: "${userPrompt}"
+
+User Context:
+- Current balance: ${context.balance || 'unknown'}
+- Risk tolerance: ${context.riskLevel || 'medium'}
+
+This is a TOKEN LAUNCH request, not a trading strategy. The council is debating:
+1. Should we launch this token?
+2. What name/symbol would work best?
+3. What are the risks of launching a token?
+4. Is now a good time for a token launch?
+
+Respond with JSON:
+{
+  "opinion": "SUPPORT" | "CONCERN" | "OPPOSE" | "NEUTRAL",
+  "reasoning": "Your 1-2 sentence analysis about the token launch",
+  "confidence": 0-100,
+  "suggestedToken": {
+    "name": "Suggested token name",
+    "symbol": "TICKER",
+    "description": "One-line description"
+  }
+}
+${prevContext}`
+}
+
+function buildTokenLaunchClerkPrompt(
+  userPrompt: string,
+  context: StrategyContext,
+  messages: CouncilMessage[]
+): string {
+  const discussion = messages
+    .map((m) => `${m.agentName} (${m.opinion}, ${m.confidence}% confident): ${m.reasoning}`)
+    .join('\n')
+
+  return `You are the Council Clerk synthesizing a TOKEN LAUNCH proposal.
+
+User's request: "${userPrompt}"
+
+User Context:
+- Balance: ${context.balance || 'unknown'}
+- Risk tolerance: ${context.riskLevel || 'medium'}
+
+Council Discussion:
+${discussion}
+
+Create a final token launch proposal. Pick the best name/symbol from suggestions.
+Consider the community or theme the user mentioned. Make it memorable but professional.
+
+Respond with JSON:
+{
+  "tokenName": "Creative Token Name",
+  "tokenSymbol": "TICKER",
+  "tokenDescription": "One-line description of what this token represents",
+  "vaultPercentage": 0-10,
+  "reasoning": "2-3 sentence summary of why this token launch is recommended",
+  "confidence": 0-100,
+  "riskLevel": "low" | "medium" | "high"
 }`
 }
 
@@ -277,6 +391,28 @@ async function callClerk(groq: Groq, prompt: string): Promise<ClerkSynthesis> {
   return JSON.parse(content)
 }
 
+async function callTokenLaunchClerk(groq: Groq, prompt: string): Promise<ClerkTokenSynthesis> {
+  const completion = await groq.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
+    messages: [
+      {
+        role: 'system',
+        content:
+          'You are the Council Clerk. Synthesize discussion into a token launch proposal. Respond only with valid JSON.',
+      },
+      { role: 'user', content: prompt },
+    ],
+    response_format: { type: 'json_object' },
+    temperature: 0.7,
+    max_tokens: 500,
+  })
+
+  const content = completion.choices[0]?.message?.content
+  if (!content) throw new Error('Empty response from Clerk')
+
+  return JSON.parse(content)
+}
+
 function calculateConsensus(
   messages: CouncilMessage[]
 ): Pick<DeliberationResult, 'consensus' | 'voteTally'> {
@@ -301,6 +437,76 @@ function calculateConsensus(
   }
 
   return { consensus, voteTally: { support, oppose, abstain } }
+}
+
+function getMockTokenLaunchDeliberation(userPrompt: string): {
+  messages: CouncilMessage[]
+  synthesis: ClerkTokenSynthesis
+} {
+  const now = Date.now()
+  const theme = userPrompt.toLowerCase().includes('lobster') ? 'lobster' :
+                userPrompt.toLowerCase().includes('cat') ? 'cat' :
+                userPrompt.toLowerCase().includes('dog') ? 'dog' : 'community'
+  
+  const tokenNames: Record<string, { name: string; symbol: string; desc: string }> = {
+    lobster: { name: 'Lobster Coin', symbol: 'LOBSTR', desc: 'The clawsome token for the lobster community' },
+    cat: { name: 'Meow Token', symbol: 'MEOW', desc: 'Purrfect token for cat lovers everywhere' },
+    dog: { name: 'Good Boy Coin', symbol: 'WOOF', desc: 'The loyal token for dog enthusiasts' },
+    community: { name: 'Community Token', symbol: 'CMTY', desc: 'A token by the community, for the community' },
+  }
+  
+  const token = tokenNames[theme]
+  
+  const messages: CouncilMessage[] = [
+    {
+      agentId: 'alpha-hunter',
+      agentName: 'Alpha Hunter',
+      agentRole: 'alpha',
+      opinion: 'SUPPORT',
+      reasoning: `${token.name} has meme potential! Community tokens on Base often see 10-100x if launched at the right time.`,
+      confidence: 80,
+      timestamp: now,
+    },
+    {
+      agentId: 'risk-sentinel',
+      agentName: 'Risk Sentinel',
+      agentRole: 'risk',
+      opinion: 'CONCERN',
+      reasoning: 'Token launches are high risk. 90% of new tokens fail. Make sure liquidity is locked and use a small vault percentage.',
+      confidence: 65,
+      timestamp: now + 1000,
+    },
+    {
+      agentId: 'macro-oracle',
+      agentName: 'Macro Oracle',
+      agentRole: 'macro',
+      opinion: 'NEUTRAL',
+      reasoning: 'Meme coin season is currently active. Market conditions are favorable for community token launches on Base.',
+      confidence: 70,
+      timestamp: now + 2000,
+    },
+    {
+      agentId: 'devils-advocate',
+      agentName: "Devil's Advocate",
+      agentRole: 'devil',
+      opinion: 'CONCERN',
+      reasoning: 'What if nobody buys? You could end up with worthless tokens and stuck liquidity. Consider starting with testnet first.',
+      confidence: 60,
+      timestamp: now + 3000,
+    },
+  ]
+
+  const synthesis: ClerkTokenSynthesis = {
+    tokenName: token.name,
+    tokenSymbol: token.symbol,
+    tokenDescription: token.desc,
+    vaultPercentage: 5,
+    reasoning: `Council approves launching ${token.name} ($${token.symbol}). Alpha Hunter sees upside potential, Risk Sentinel advises caution with a 5% vault lock. Market timing is favorable per Macro Oracle.`,
+    confidence: 72,
+    riskLevel: 'medium',
+  }
+
+  return { messages, synthesis }
 }
 
 function getMockDeliberation(userPrompt: string): {
@@ -499,4 +705,131 @@ export async function runCouncilDeliberation(
   return { deliberation: { messages, consensus, voteTally, rounds: 1 }, proposal }
 }
 
-export { AGENT_PERSONAS }
+export async function runTokenLaunchDeliberation(
+  request: CouncilRequest,
+  walletAddress: string
+): Promise<{ deliberation: DeliberationResult; proposal: TokenLaunchProposal }> {
+  const isMockMode = process.env.GROQ_MOCK === 'true'
+  const apiKey = process.env.GROQ_API_KEY
+
+  if (isMockMode || !apiKey) {
+    console.log('[Council] Mock mode - returning mock token launch deliberation')
+    const { messages, synthesis } = getMockTokenLaunchDeliberation(request.userPrompt)
+    const clerkMessage: CouncilMessage = {
+      agentId: 'council-clerk',
+      agentName: 'Council Clerk',
+      agentRole: 'clerk',
+      opinion: 'SUPPORT',
+      reasoning: synthesis.reasoning,
+      confidence: synthesis.confidence,
+      timestamp: Date.now() + 4000,
+    }
+    const allMessages = [...messages, clerkMessage]
+    const { consensus, voteTally } = calculateConsensus(allMessages)
+
+    const proposal: TokenLaunchProposal = {
+      id: `launch-${Date.now()}`,
+      agentId: 'council',
+      agentName: 'Council',
+      action: 'token_launch',
+      strategyType: 'token_launch',
+      tokenName: synthesis.tokenName,
+      tokenSymbol: synthesis.tokenSymbol,
+      tokenDescription: synthesis.tokenDescription,
+      pairedToken: 'WETH',
+      rewardRecipient: walletAddress,
+      rewardBps: FEE_CONFIG.AGENT_BPS,
+      vaultPercentage: synthesis.vaultPercentage,
+      lockupDays: 7,
+      reasoning: synthesis.reasoning,
+      confidence: synthesis.confidence,
+      riskLevel: synthesis.riskLevel,
+      deliberation: { messages: allMessages, consensus, voteTally, rounds: 1 },
+    }
+
+    return { deliberation: { messages: allMessages, consensus, voteTally, rounds: 1 }, proposal }
+  }
+
+  const groq = new Groq({ apiKey })
+  const messages: CouncilMessage[] = []
+  const debatingAgents = AGENT_PERSONAS.filter((a) => a.role !== 'clerk')
+
+  for (const persona of debatingAgents) {
+    try {
+      const prompt = buildTokenLaunchAgentPrompt(persona, request.userPrompt, request.context, messages)
+      const response = await callAgent(groq, persona, prompt)
+
+      messages.push({
+        agentId: persona.id,
+        agentName: persona.name,
+        agentRole: persona.role,
+        opinion: response.opinion,
+        reasoning: response.reasoning,
+        confidence: response.confidence,
+        timestamp: Date.now(),
+      })
+
+      console.log(`[Council] ${persona.name} (token launch): ${response.opinion}`)
+    } catch (err) {
+      console.error(`[Council] ${persona.name} failed:`, err)
+      messages.push({
+        agentId: persona.id,
+        agentName: persona.name,
+        agentRole: persona.role,
+        opinion: 'NEUTRAL',
+        reasoning: 'Unable to provide analysis at this time.',
+        confidence: 50,
+        timestamp: Date.now(),
+      })
+    }
+  }
+
+  const clerkPersona = AGENT_PERSONAS.find((a) => a.role === 'clerk')!
+  const clerkPrompt = buildTokenLaunchClerkPrompt(request.userPrompt, request.context, messages)
+
+  let synthesis: ClerkTokenSynthesis
+  try {
+    synthesis = await callTokenLaunchClerk(groq, clerkPrompt)
+  } catch (err) {
+    console.error('[Council] Clerk token synthesis failed:', err)
+    synthesis = getMockTokenLaunchDeliberation(request.userPrompt).synthesis
+  }
+
+  const clerkMessage: CouncilMessage = {
+    agentId: clerkPersona.id,
+    agentName: clerkPersona.name,
+    agentRole: 'clerk',
+    opinion: 'SUPPORT',
+    reasoning: synthesis.reasoning,
+    confidence: synthesis.confidence,
+    timestamp: Date.now(),
+  }
+  messages.push(clerkMessage)
+
+  const { consensus, voteTally } = calculateConsensus(messages)
+
+  const proposal: TokenLaunchProposal = {
+    id: `launch-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    agentId: 'council',
+    agentName: 'Council',
+    action: 'token_launch',
+    strategyType: 'token_launch',
+    tokenName: synthesis.tokenName,
+    tokenSymbol: synthesis.tokenSymbol,
+    tokenDescription: synthesis.tokenDescription,
+    pairedToken: 'WETH',
+    rewardRecipient: walletAddress,
+    rewardBps: FEE_CONFIG.AGENT_BPS,
+    vaultPercentage: synthesis.vaultPercentage,
+    lockupDays: 7,
+    reasoning: synthesis.reasoning,
+    confidence: synthesis.confidence,
+    riskLevel: synthesis.riskLevel,
+    deliberation: { messages, consensus, voteTally, rounds: 1 },
+  }
+
+  console.log(`[Council] Token launch deliberation complete: ${consensus}`)
+  return { deliberation: { messages, consensus, voteTally, rounds: 1 }, proposal }
+}
+
+export { AGENT_PERSONAS, isTokenLaunchPrompt }

@@ -24,7 +24,7 @@ function generateMockTxHash(): string {
   return hash
 }
 
-function mockLaunch(proposal: TokenLaunchProposal): TokenLaunchResult {
+function mockLaunch(_proposal: TokenLaunchProposal): TokenLaunchResult {
   const tokenAddress = generateMockAddress()
   return {
     success: true,
@@ -52,7 +52,7 @@ export async function launchToken(
   try {
     const { Clanker } = await import('clanker-sdk/v4')
     
-    const clanker = new Clanker({ publicClient, wallet: walletClient })
+    const clanker = new Clanker({ publicClient, wallet: walletClient } as unknown as ConstructorParameters<typeof Clanker>[0])
 
     console.log('[Clanker] Deploying token:', proposal.tokenName, proposal.tokenSymbol)
 
@@ -110,3 +110,16 @@ export async function launchToken(
 }
 
 export { mockEnabled as isClankerMockMode }
+
+// React hook for token launching
+export function useClankerLauncher() {
+  const launch = async (
+    proposal: TokenLaunchProposal,
+    walletClient: WalletClient,
+    publicClient: PublicClient
+  ): Promise<TokenLaunchResult> => {
+    return launchToken(proposal, walletClient, publicClient)
+  }
+
+  return { launch, isMockMode: mockEnabled }
+}
