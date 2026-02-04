@@ -467,7 +467,7 @@ export class CityScene extends Phaser.Scene {
     }
   }
 
-  private populateAgentPanel(agents: Array<{ agentId: number; name: string; strategy: string }>) {
+  private populateAgentPanel(agents: Array<{ agentId: number; name: string; strategy: string; reputation?: number; registrySource?: string }>) {
     if (!this.agentPanel) return
     
     while (this.agentPanel.list.length > 2) {
@@ -493,12 +493,40 @@ export class CityScene extends Phaser.Scene {
       })
       this.agentPanel!.add(nameText)
       
-      const strategyText = this.add.text(-90, y + 8, agent.strategy, {
+      const reputationStr = agent.reputation !== undefined ? `★ ${agent.reputation}` : '★ --'
+      const strategyWithRep = `${agent.strategy} | ${reputationStr}`
+      const strategyText = this.add.text(-90, y + 8, strategyWithRep, {
         fontSize: '11px',
-        color: '#94a3b8',
+        color: agent.reputation !== undefined ? '#fbbf24' : '#94a3b8',
         fontFamily: 'Arial',
       })
       this.agentPanel!.add(strategyText)
+      
+      if (agent.registrySource === 'erc8004') {
+        const scanLink = this.add.text(55, y - 8, '🔗', {
+          fontSize: '12px',
+          color: '#60a5fa',
+          fontFamily: 'Arial',
+        }).setOrigin(0.5).setInteractive()
+        
+        scanLink.on('pointerover', () => {
+          scanLink.setScale(1.2)
+          this.input.setDefaultCursor('pointer')
+        })
+        
+        scanLink.on('pointerout', () => {
+          scanLink.setScale(1)
+          this.input.setDefaultCursor('default')
+        })
+        
+        scanLink.on('pointerdown', () => {
+          const chainId = 84532
+          const registry = '0x8004A818BFB912233c491871b3d84c89A494BD9e'
+          window.open(`https://www.8004scan.io/agent/${chainId}/${registry}/${agent.agentId}`, '_blank')
+        })
+        
+        this.agentPanel!.add(scanLink)
+      }
       
       const deployBtn = this.add.text(70, y, 'Deploy', {
         fontSize: '12px',
