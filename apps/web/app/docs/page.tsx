@@ -113,6 +113,72 @@ export default function DocsPage() {
           </p>
         </section>
 
+        <section className="mb-12 bg-cyan-500/10 border border-cyan-500/30 rounded-xl p-6">
+          <h2 className="text-2xl font-semibold mb-4 text-cyan-400">🔗 ERC-8004 Agent Registry</h2>
+          <p className="text-gray-300 leading-relaxed mb-4">
+            Agents are discovered from an <strong>on-chain identity registry</strong> following the ERC-8004 standard:
+          </p>
+          <ul className="list-disc list-inside text-gray-300 space-y-2 mb-4">
+            <li><strong>Agent Discovery:</strong> Query registry for available agents with metadata URIs</li>
+            <li><strong>Reputation Scores:</strong> Read agent reputation from companion registry (0-100 scale)</li>
+            <li><strong>8004scan Links:</strong> View agent details on the ERC-8004 block explorer</li>
+            <li><strong>Fallback:</strong> Mock agents used when registry is empty or unreachable</li>
+          </ul>
+          <div className="bg-gray-900 rounded-lg p-4 text-sm font-mono text-gray-400 mb-4">
+            <div>Chain: Base Sepolia (84532)</div>
+            <div>Identity Registry: 0x8004A818BFB912233c491871b3d84c89A494BD9e</div>
+            <div>Reputation Registry: 0x8004B663056A597Dffe9eCcC1965A193B7388713</div>
+            <div>Explorer: <a href="https://www.8004scan.io" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">8004scan.io</a></div>
+          </div>
+          <p className="text-gray-400 text-sm">
+            Implementation: <code className="bg-gray-800 px-2 py-1 rounded">apps/web/lib/erc8004/client.ts</code>, <code className="bg-gray-800 px-2 py-1 rounded">apps/web/app/api/agents/list/route.ts</code>
+          </p>
+        </section>
+
+        <section className="mb-12 bg-violet-500/10 border border-violet-500/30 rounded-xl p-6">
+          <h2 className="text-2xl font-semibold mb-4 text-violet-400">💳 x402 Micropayments</h2>
+          <p className="text-gray-300 leading-relaxed mb-4">
+            External agent endpoints can require <strong>pay-per-proposal</strong> via x402 protocol:
+          </p>
+          <ul className="list-disc list-inside text-gray-300 space-y-2 mb-4">
+            <li><strong>HTTP 402:</strong> External endpoints return Payment Required with x402 headers</li>
+            <li><strong>Auto-Pay:</strong> Client wraps fetch with payment handling using wallet signer</li>
+            <li><strong>USDC Settlement:</strong> ~$0.01 per proposal, settled instantly on Base Sepolia</li>
+            <li><strong>Facilitator:</strong> x402.org handles payment verification and settlement</li>
+          </ul>
+          <div className="bg-gray-900 rounded-lg p-4 text-sm font-mono text-gray-400 mb-4">
+            <div>Protocol: x402 (HTTP 402 Payment Required)</div>
+            <div>Network: eip155:84532 (Base Sepolia)</div>
+            <div>Currency: USDC</div>
+            <div>Typical Fee: $0.01 per proposal</div>
+          </div>
+          <p className="text-gray-400 text-sm">
+            Implementation: <code className="bg-gray-800 px-2 py-1 rounded">apps/web/lib/x402/client.ts</code>, <code className="bg-gray-800 px-2 py-1 rounded">apps/web/lib/agents/council.ts</code>
+          </p>
+        </section>
+
+        <section className="mb-12 bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-6">
+          <h2 className="text-2xl font-semibold mb-4 text-emerald-400">🤖 BYOA (Bring Your Own Agent)</h2>
+          <p className="text-gray-300 leading-relaxed mb-4">
+            Users can connect their <strong>own external agent endpoint</strong> for custom proposals:
+          </p>
+          <ul className="list-disc list-inside text-gray-300 space-y-2 mb-4">
+            <li><strong>Agent Settings:</strong> Configure endpoint URL via settings modal (gear icon)</li>
+            <li><strong>ENS Persistence:</strong> Endpoint saved to ENS text record <code className="bg-gray-800 px-1 rounded">com.agentropolis.endpoint</code></li>
+            <li><strong>External Protocol:</strong> POST with <code className="bg-gray-800 px-1 rounded">ExternalAgentRequest</code>, receive <code className="bg-gray-800 px-1 rounded">ExternalAgentResponse</code></li>
+            <li><strong>x402 Support:</strong> External endpoints can require micropayments</li>
+            <li><strong>Fallback:</strong> If external fails, falls back to server Groq agent</li>
+          </ul>
+          <div className="bg-gray-900 rounded-lg p-4 text-sm font-mono text-gray-400 mb-4">
+            <div>Request: POST {`{prompt, context, requestId}`}</div>
+            <div>Response: {`{success, proposal?, error?}`}</div>
+            <div>Demo Server: <code>bun run demo:agent</code> (port 4021)</div>
+          </div>
+          <p className="text-gray-400 text-sm">
+            Implementation: <code className="bg-gray-800 px-2 py-1 rounded">apps/web/components/AgentSettings.tsx</code>, <code className="bg-gray-800 px-2 py-1 rounded">apps/web/scripts/demo-x402-server.ts</code>
+          </p>
+        </section>
+
         <section className="mb-12 bg-green-500/10 border border-green-500/30 rounded-xl p-6">
           <h2 className="text-2xl font-semibold mb-4 text-green-400">🔖 ENS Integration ($5k Track)</h2>
           <p className="text-gray-300 leading-relaxed mb-4">
@@ -139,25 +205,29 @@ export default function DocsPage() {
 │  Frontend (Next.js + Phaser)                                │
 │  ├── CityScene: Isometric city with deployable agents       │
 │  ├── CouncilScene: Roundtable UI with speech bubbles        │
+│  ├── AgentSettings: BYOA endpoint configuration modal       │
 │  └── Components: WalletProvider, SessionProvider, Risk UI   │
 ├─────────────────────────────────────────────────────────────┤
 │  API Routes                                                 │
-│  ├── /api/agents/list: ERC-8004 agent registry query        │
+│  ├── /api/agents/list: ERC-8004 registry + reputation query │
 │  ├── /api/agents/propose: Single-agent proposal generation  │
-│  ├── /api/agents/council: Multi-agent deliberation endpoint │
+│  ├── /api/agents/council: Multi-agent deliberation + BYOA   │
 │  └── /api/agents/launch-token: Token launch via Clanker     │
 ├─────────────────────────────────────────────────────────────┤
 │  Execution Layer                                            │
 │  ├── Strategy Router: Routes to swap or LP executor         │
 │  ├── Swap Executor: V4_SWAP via Universal Router            │
 │  ├── LP Executor: PositionManager for liquidity provision   │
+│  ├── x402 Client: Payment-wrapped fetch for external agents │
 │  └── Pool Discovery: Find initialized v4 pools              │
 ├─────────────────────────────────────────────────────────────┤
 │  Integrations                                               │
 │  ├── Yellow: Session lifecycle, off-chain micro-actions     │
 │  ├── Uniswap v4: Swaps + LP via Universal Router & PM       │
 │  ├── Clanker: Token launches with v4 hooks + fee earning    │
-│  └── ENS: Name resolution, avatar, text record storage      │
+│  ├── ERC-8004: Agent discovery + reputation from registry   │
+│  ├── x402: HTTP micropayments for external agent endpoints  │
+│  └── ENS: Name resolution, avatar, BYOA config storage      │
 └─────────────────────────────────────────────────────────────┘
           `}</pre>
         </section>
