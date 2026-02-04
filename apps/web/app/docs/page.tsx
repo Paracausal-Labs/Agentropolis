@@ -92,6 +92,27 @@ export default function DocsPage() {
           </p>
         </section>
 
+        <section className="mb-12 bg-orange-500/10 border border-orange-500/30 rounded-xl p-6">
+          <h2 className="text-2xl font-semibold mb-4 text-orange-400">🚀 Clanker Token Launches (Agentic Finance)</h2>
+          <p className="text-gray-300 leading-relaxed mb-4">
+            Agents can now <strong>propose and launch new tokens</strong> via Clanker, built on Uniswap v4 hooks:
+          </p>
+          <ul className="list-disc list-inside text-gray-300 space-y-2 mb-4">
+            <li><strong>Council Deliberation:</strong> Agents debate token name, symbol, and description</li>
+            <li><strong>One-Click Launch:</strong> Clanker SDK deploys token + creates liquidity pool atomically</li>
+            <li><strong>Fee Earning:</strong> User earns 80% of all trading fees from the launched token</li>
+            <li><strong>Uniswap v4 Hooks:</strong> ClankerHookV2 handles fee collection and MEV protection</li>
+          </ul>
+          <div className="bg-gray-900 rounded-lg p-4 text-sm font-mono text-gray-400 mb-4">
+            <div>Clanker Factory (Base Sepolia): 0xE85A59c628F7d27878ACeB4bf3b35733630083a9</div>
+            <div>Fee Split: 80% to creator/agent, 20% to platform</div>
+            <div>SDK: clanker-sdk@4.2.10</div>
+          </div>
+          <p className="text-gray-400 text-sm">
+            Implementation: <code className="bg-gray-800 px-2 py-1 rounded">apps/web/lib/clanker/client.ts</code>, <code className="bg-gray-800 px-2 py-1 rounded">apps/web/app/api/agents/launch-token/route.ts</code>
+          </p>
+        </section>
+
         <section className="mb-12 bg-green-500/10 border border-green-500/30 rounded-xl p-6">
           <h2 className="text-2xl font-semibold mb-4 text-green-400">🔖 ENS Integration ($5k Track)</h2>
           <p className="text-gray-300 leading-relaxed mb-4">
@@ -123,7 +144,8 @@ export default function DocsPage() {
 │  API Routes                                                 │
 │  ├── /api/agents/list: ERC-8004 agent registry query        │
 │  ├── /api/agents/propose: Single-agent proposal generation  │
-│  └── /api/agents/council: Multi-agent deliberation endpoint │
+│  ├── /api/agents/council: Multi-agent deliberation endpoint │
+│  └── /api/agents/launch-token: Token launch via Clanker     │
 ├─────────────────────────────────────────────────────────────┤
 │  Execution Layer                                            │
 │  ├── Strategy Router: Routes to swap or LP executor         │
@@ -134,6 +156,7 @@ export default function DocsPage() {
 │  Integrations                                               │
 │  ├── Yellow: Session lifecycle, off-chain micro-actions     │
 │  ├── Uniswap v4: Swaps + LP via Universal Router & PM       │
+│  ├── Clanker: Token launches with v4 hooks + fee earning    │
 │  └── ENS: Name resolution, avatar, text record storage      │
 └─────────────────────────────────────────────────────────────┘
           `}</pre>

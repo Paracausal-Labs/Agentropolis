@@ -25,7 +25,7 @@ interface AgentSeat {
   sprite: Phaser.GameObjects.Container
 }
 
-interface Proposal {
+interface TradeProposalUI {
   id: string
   agentName: string
   pair: { tokenIn: { symbol: string }; tokenOut: { symbol: string } }
@@ -38,11 +38,34 @@ interface Proposal {
   deliberation?: DeliberationResult
 }
 
+interface TokenLaunchProposalUI {
+  id: string
+  agentName: string
+  action: 'token_launch'
+  strategyType: 'token_launch'
+  tokenName: string
+  tokenSymbol: string
+  tokenDescription: string
+  reasoning: string
+  confidence: number
+  riskLevel: string
+  rewardRecipient: string
+  rewardBps: number
+  vaultPercentage?: number
+  deliberation?: DeliberationResult
+}
+
+type Proposal = TradeProposalUI | TokenLaunchProposalUI
+
+function isTokenLaunchProposal(proposal: Proposal): proposal is TokenLaunchProposalUI {
+  return proposal.strategyType === 'token_launch'
+}
+
 const PRESET_PROMPTS = [
   { label: '💰 Passive Income', prompt: 'I want passive income from my 0.1 ETH' },
   { label: '🔄 Simple Swap', prompt: 'Swap 0.05 ETH to USDC' },
   { label: '📈 High Yield LP', prompt: 'Provide liquidity for maximum yield' },
-  { label: '🛡️ Safe Strategy', prompt: 'What is the safest DeFi strategy for my ETH?' },
+  { label: '🚀 Launch Token', prompt: 'Launch a memecoin for the lobster community' },
 ]
 
 export class CouncilScene extends Phaser.Scene {
@@ -614,57 +637,12 @@ export class CouncilScene extends Phaser.Scene {
     riskIndicator.fillStyle(riskColor, 1)
     riskIndicator.fillRoundedRect(-250, -80, 6, 160, 3)
     this.proposalCard.add(riskIndicator)
-    
-    const title = this.add.text(0, -55, `📊 Trade Proposal from ${proposal.agentName}`, {
-      fontSize: '14px',
-      color: '#fbbf24',
-      fontFamily: 'Arial',
-      fontStyle: 'bold',
-    }).setOrigin(0.5)
-    this.proposalCard.add(title)
-    
-    const swapText = this.add.text(0, -25, 
-      `${proposal.amountIn} ${proposal.pair.tokenIn.symbol} → ${proposal.expectedAmountOut} ${proposal.pair.tokenOut.symbol}`, {
-      fontSize: '20px',
-      color: '#ffffff',
-      fontFamily: 'Arial',
-      fontStyle: 'bold',
-    }).setOrigin(0.5)
-    this.proposalCard.add(swapText)
-    
-    const reasonText = this.add.text(0, 15, proposal.reasoning.substring(0, 80), {
-      fontSize: '12px',
-      color: '#94a3b8',
-      fontFamily: 'Arial',
-      wordWrap: { width: 420 },
-    }).setOrigin(0.5)
-    this.proposalCard.add(reasonText)
 
-    const confidenceBarBg = this.add.graphics()
-    confidenceBarBg.fillStyle(0x374151, 1)
-    confidenceBarBg.fillRoundedRect(-100, 48, 200, 12, 6)
-    this.proposalCard.add(confidenceBarBg)
-
-    const confidenceBar = this.add.graphics()
-    const barColor = proposal.confidence >= 75 ? 0x22c55e : proposal.confidence >= 50 ? 0xeab308 : 0xef4444
-    confidenceBar.fillStyle(barColor, 1)
-    confidenceBar.fillRoundedRect(-100, 48, (proposal.confidence / 100) * 200, 12, 6)
-    this.proposalCard.add(confidenceBar)
-
-    const confidenceLabel = this.add.text(-110, 47, `${proposal.confidence}%`, {
-      fontSize: '10px',
-      color: '#94a3b8',
-      fontFamily: 'Arial',
-    }).setOrigin(1, 0)
-    this.proposalCard.add(confidenceLabel)
-
-    const riskLabel = this.add.text(110, 47, proposal.riskLevel.toUpperCase(), {
-      fontSize: '10px',
-      color: Phaser.Display.Color.IntegerToColor(riskColor).rgba,
-      fontFamily: 'Arial',
-      fontStyle: 'bold',
-    }).setOrigin(0, 0)
-    this.proposalCard.add(riskLabel)
+    if (isTokenLaunchProposal(proposal)) {
+      this.displayTokenLaunchProposal(proposal, riskColor)
+    } else {
+      this.displayTradeProposal(proposal, riskColor)
+    }
 
     this.tweens.add({
       targets: this.proposalCard,
@@ -699,13 +677,117 @@ export class CouncilScene extends Phaser.Scene {
     }
   }
 
+  private displayTradeProposal(proposal: TradeProposalUI, riskColor: number) {
+    if (!this.proposalCard) return
+
+    const title = this.add.text(0, -55, `📊 Trade Proposal from ${proposal.agentName}`, {
+      fontSize: '14px',
+      color: '#fbbf24',
+      fontFamily: 'Arial',
+      fontStyle: 'bold',
+    }).setOrigin(0.5)
+    this.proposalCard.add(title)
+    
+    const swapText = this.add.text(0, -25, 
+      `${proposal.amountIn} ${proposal.pair.tokenIn.symbol} → ${proposal.expectedAmountOut} ${proposal.pair.tokenOut.symbol}`, {
+      fontSize: '20px',
+      color: '#ffffff',
+      fontFamily: 'Arial',
+      fontStyle: 'bold',
+    }).setOrigin(0.5)
+    this.proposalCard.add(swapText)
+    
+    const reasonText = this.add.text(0, 15, proposal.reasoning.substring(0, 80), {
+      fontSize: '12px',
+      color: '#94a3b8',
+      fontFamily: 'Arial',
+      wordWrap: { width: 420 },
+    }).setOrigin(0.5)
+    this.proposalCard.add(reasonText)
+
+    this.addConfidenceBar(proposal.confidence, riskColor, proposal.riskLevel)
+  }
+
+  private displayTokenLaunchProposal(proposal: TokenLaunchProposalUI, riskColor: number) {
+    if (!this.proposalCard) return
+
+    const title = this.add.text(0, -55, `🚀 Token Launch Proposal`, {
+      fontSize: '14px',
+      color: '#f97316',
+      fontFamily: 'Arial',
+      fontStyle: 'bold',
+    }).setOrigin(0.5)
+    this.proposalCard.add(title)
+    
+    const tokenText = this.add.text(0, -25, 
+      `${proposal.tokenName} ($${proposal.tokenSymbol})`, {
+      fontSize: '20px',
+      color: '#ffffff',
+      fontFamily: 'Arial',
+      fontStyle: 'bold',
+    }).setOrigin(0.5)
+    this.proposalCard.add(tokenText)
+    
+    const descText = this.add.text(0, 5, proposal.tokenDescription, {
+      fontSize: '12px',
+      color: '#94a3b8',
+      fontFamily: 'Arial',
+      wordWrap: { width: 420 },
+    }).setOrigin(0.5)
+    this.proposalCard.add(descText)
+
+    const feesText = this.add.text(0, 30, `You earn 80% of trading fees`, {
+      fontSize: '11px',
+      color: '#22c55e',
+      fontFamily: 'Arial',
+    }).setOrigin(0.5)
+    this.proposalCard.add(feesText)
+
+    this.addConfidenceBar(proposal.confidence, riskColor, proposal.riskLevel)
+  }
+
+  private addConfidenceBar(confidence: number, riskColor: number, riskLevel: string) {
+    if (!this.proposalCard) return
+
+    const confidenceBarBg = this.add.graphics()
+    confidenceBarBg.fillStyle(0x374151, 1)
+    confidenceBarBg.fillRoundedRect(-100, 48, 200, 12, 6)
+    this.proposalCard.add(confidenceBarBg)
+
+    const confidenceBar = this.add.graphics()
+    const barColor = confidence >= 75 ? 0x22c55e : confidence >= 50 ? 0xeab308 : 0xef4444
+    confidenceBar.fillStyle(barColor, 1)
+    confidenceBar.fillRoundedRect(-100, 48, (confidence / 100) * 200, 12, 6)
+    this.proposalCard.add(confidenceBar)
+
+    const confidenceLabel = this.add.text(-110, 47, `${confidence}%`, {
+      fontSize: '10px',
+      color: '#94a3b8',
+      fontFamily: 'Arial',
+    }).setOrigin(1, 0)
+    this.proposalCard.add(confidenceLabel)
+
+    const riskLabel = this.add.text(110, 47, riskLevel.toUpperCase(), {
+      fontSize: '10px',
+      color: Phaser.Display.Color.IntegerToColor(riskColor).rgba,
+      fontFamily: 'Arial',
+      fontStyle: 'bold',
+    }).setOrigin(0, 0)
+    this.proposalCard.add(riskLabel)
+  }
+
   private handleApprove() {
     if (!this.currentProposal) return
     
     console.log('[CouncilScene] Proposal approved:', this.currentProposal.id)
-    this.game.events.emit('proposalApproved', this.currentProposal)
     
-    this.showResult('✓ Approved! Executing swap...', 0x22c55e)
+    if (isTokenLaunchProposal(this.currentProposal)) {
+      this.game.events.emit('tokenLaunchApproved', this.currentProposal)
+      this.showResult('🚀 Launching token...', 0xf97316)
+    } else {
+      this.game.events.emit('proposalApproved', this.currentProposal)
+      this.showResult('✓ Approved! Executing swap...', 0x22c55e)
+    }
   }
 
   private handleReject() {
