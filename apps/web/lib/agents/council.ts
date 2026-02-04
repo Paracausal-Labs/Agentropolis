@@ -110,6 +110,25 @@ interface ClerkSynthesis {
   tickUpper?: number
 }
 
+function detectUserIntent(userPrompt: string): { strategy: StrategyType | null; hint: string } {
+  const lower = userPrompt.toLowerCase()
+  
+  if (lower.includes('swap') || lower.includes('exchange') || lower.includes('convert') || lower.includes('trade')) {
+    return { strategy: 'swap', hint: 'User explicitly wants a SWAP. Respect this intent.' }
+  }
+  if (lower.includes('liquidity') || lower.includes(' lp ') || lower.includes('provide lp') || lower.includes('add lp')) {
+    if (lower.includes('concentrated') || lower.includes('tight') || lower.includes('narrow')) {
+      return { strategy: 'lp_concentrated', hint: 'User wants CONCENTRATED LP. Respect this intent.' }
+    }
+    return { strategy: 'lp_full_range', hint: 'User wants to provide LIQUIDITY. Respect this intent.' }
+  }
+  if (lower.includes('dca') || lower.includes('dollar cost') || lower.includes('recurring') || lower.includes('weekly')) {
+    return { strategy: 'dca', hint: 'User wants DCA strategy. Respect this intent.' }
+  }
+  
+  return { strategy: null, hint: 'No explicit strategy mentioned. Recommend based on context.' }
+}
+
 function buildAgentPrompt(
   persona: AgentPersona,
   userPrompt: string,
@@ -122,6 +141,11 @@ function buildAgentPrompt(
           .map((m) => `${m.agentName} (${m.opinion}): ${m.reasoning}`)
           .join('\n')}`
       : ''
+
+  const { strategy: detectedIntent, hint } = detectUserIntent(userPrompt)
+  const intentGuidance = detectedIntent 
+    ? `\n\nIMPORTANT: ${hint} Your suggestedStrategy.type MUST be "${detectedIntent}" unless there's a critical risk.`
+    : ''
 
   return `${persona.systemPrompt}
 
@@ -141,6 +165,7 @@ Available strategies:
 - dca: Dollar-cost averaging over time
 - lp_full_range: Provide liquidity across all prices (lower IL risk, lower fees)
 - lp_concentrated: Provide liquidity in tight range (higher fees, higher IL risk)
+${intentGuidance}
 ${prevContext}
 
 Respond with JSON:
@@ -167,6 +192,11 @@ function buildClerkPrompt(
     .map((m) => `${m.agentName} (${m.opinion}, ${m.confidence}% confident): ${m.reasoning}`)
     .join('\n')
 
+  const { strategy: detectedIntent, hint } = detectUserIntent(userPrompt)
+  const intentGuidance = detectedIntent 
+    ? `\n\nCRITICAL: ${hint} finalStrategy MUST be "${detectedIntent}" unless Risk Sentinel issued a VETO.`
+    : ''
+
   return `You are the Council Clerk. Synthesize the council's discussion into a final actionable proposal.
 
 User's request: "${userPrompt}"
@@ -174,12 +204,14 @@ User's request: "${userPrompt}"
 User Context:
 - Balance: ${context.balance || 'unknown'}
 - Risk tolerance: ${context.riskLevel || 'medium'}
+${intentGuidance}
 
 Council Discussion:
 ${discussion}
 
 Based on the council's input, create a final proposal. Weight the Risk Sentinel's concerns heavily.
 If there was a VETO, recommend a safer alternative.
+IMPORTANT: Respect the user's explicitly stated strategy intent unless there's a critical risk.
 
 Respond with JSON:
 {
