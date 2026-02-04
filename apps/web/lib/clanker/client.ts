@@ -49,6 +49,15 @@ export async function launchToken(
     return { success: false, error: 'Wallet not connected' }
   }
 
+  const chainId = await publicClient.getChainId()
+  if (chainId !== 8453) {
+    console.warn('[Clanker] SDK requires Base Mainnet (8453), current chain:', chainId)
+    return { 
+      success: false, 
+      error: `Clanker SDK requires Base Mainnet. Current chain: ${chainId}. Use mock mode for testnet demos.` 
+    }
+  }
+
   try {
     const { Clanker } = await import('clanker-sdk/v4')
     

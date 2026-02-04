@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { runCouncilDeliberation, type CouncilRequest } from '@/lib/agents/council'
+import { runCouncilDeliberation, runTokenLaunchDeliberation, isTokenLaunchPrompt, type CouncilRequest } from '@/lib/agents/council'
 
 const RATE_LIMIT_WINDOW_MS = 60_000
 const RATE_LIMIT_MAX_REQUESTS = 5 // Lower limit for council (more expensive)
@@ -76,8 +76,9 @@ async function handleDeliberation(request: NextRequest): Promise<NextResponse> {
       )
     }
 
+    const userPrompt = String(body.userPrompt)
     const councilRequest: CouncilRequest = {
-      userPrompt: String(body.userPrompt),
+      userPrompt,
       context: {
         balance: body.context?.balance || '0.1 ETH',
         preferredTokens: body.context?.preferredTokens || ['USDC', 'WETH'],
@@ -86,7 +87,11 @@ async function handleDeliberation(request: NextRequest): Promise<NextResponse> {
       deployedAgents: body.deployedAgents,
     }
 
-    const result = await runCouncilDeliberation(councilRequest)
+    const walletAddress = body.walletAddress || '0x0000000000000000000000000000000000000000'
+    
+    const result = isTokenLaunchPrompt(userPrompt)
+      ? await runTokenLaunchDeliberation(councilRequest, walletAddress)
+      : await runCouncilDeliberation(councilRequest)
 
     return NextResponse.json({
       success: true,
