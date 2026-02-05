@@ -531,9 +531,17 @@ export class CouncilScene extends Phaser.Scene {
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       
-      const guestSessionId = typeof localStorage !== 'undefined' ? localStorage.getItem('guestSessionId') : null
-      if (guestSessionId) {
-        headers['X-Guest-Session'] = guestSessionId
+      // Guest session key matches GuestMode.tsx
+      const guestSessionData = typeof localStorage !== 'undefined' ? localStorage.getItem('agentropolis_guest_session') : null
+      if (guestSessionData) {
+        try {
+          const session = JSON.parse(guestSessionData)
+          // Use startTime as a stable session identifier for rate limiting
+          headers['X-Guest-Session'] = String(session.startTime)
+        } catch {
+          // If parse fails, use raw value
+          headers['X-Guest-Session'] = guestSessionData
+        }
       }
 
       const agentEndpoint = typeof localStorage !== 'undefined' ? localStorage.getItem('agentEndpoint') : null

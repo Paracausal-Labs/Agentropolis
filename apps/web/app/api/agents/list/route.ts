@@ -87,7 +87,8 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('[API] Error fetching agents:', error)
     try {
-      const limit = Math.min(parseInt(new URL(request.url).searchParams.get('limit') || '10'), 50)
+      const parsedLimit = parseInt(new URL(request.url).searchParams.get('limit') || '10')
+      const limit = Math.min(Number.isNaN(parsedLimit) ? 10 : parsedLimit, 50)
       return await getFallbackAgents(limit)
     } catch (fallbackError) {
       console.error('[API] Fallback to mock agents failed:', fallbackError)

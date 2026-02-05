@@ -235,6 +235,10 @@ export const executeSwap = async (
     throw new Error('Invalid amountIn: must be greater than 0')
   }
 
+  if (expectedAmountOut <= 0n) {
+    throw new Error('Invalid expectedAmountOut: must be greater than 0')
+  }
+
   const nowSeconds = Math.floor(Date.now() / 1000)
   const deadlineSeconds = proposal.deadline > 1_000_000_000_000
     ? Math.floor(proposal.deadline / 1000)
