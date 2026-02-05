@@ -67,8 +67,16 @@ CONTEXT.md
 context.md
 WORKPLAN.md
 AUDIT.md
+AUDIT_*.md
+LOGIC_AUDIT*.md
 TESTING.md
 testing.md
+logs.md
+scripts/
+
+# Test screenshots
+*.png
+!apps/**/*.png
 
 # Large files
 *.mp4
