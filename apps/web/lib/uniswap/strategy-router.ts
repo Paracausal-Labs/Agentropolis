@@ -10,6 +10,7 @@ export interface ExecutionResult {
   txHash?: string
   positionId?: string
   error?: string
+  warning?: string
   strategyType: StrategyType
 }
 
@@ -35,12 +36,17 @@ export const executeProposal = async (
       }
     }
 
+    const isDCA = strategyType === 'dca'
+    if (isDCA) {
+      console.warn('[strategy-router] DCA not fully implemented - executing as single swap')
+    }
     console.info('[strategy-router] Executing swap strategy:', strategyType)
     const result = await executeSwap(proposal, walletClient)
     return {
       success: true,
       txHash: result.txHash,
       strategyType,
+      ...(isDCA && { warning: 'DCA executed as single swap (scheduling not yet implemented)' }),
     }
   } catch (err) {
     console.error('[strategy-router] Execution failed:', err)
@@ -72,11 +78,16 @@ export const useStrategyExecutor = () => {
           }
         }
 
+        const isDCA = strategyType === 'dca'
+        if (isDCA) {
+          console.warn('[strategy-router] DCA not fully implemented - executing as single swap')
+        }
         const result = await swapExecute(proposal)
         return {
           success: true,
           txHash: result.txHash,
           strategyType,
+          ...(isDCA && { warning: 'DCA executed as single swap (scheduling not yet implemented)' }),
         }
       } catch (err) {
         return {

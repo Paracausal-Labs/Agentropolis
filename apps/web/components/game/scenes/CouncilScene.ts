@@ -546,12 +546,15 @@ export class CouncilScene extends Phaser.Scene {
 
       const agentEndpoint = typeof localStorage !== 'undefined' ? localStorage.getItem('agentEndpoint') : null
 
+      const sessionBalance = typeof window !== 'undefined' && window.agentropolis?.getBalance?.() || '0'
+      const balanceDisplay = sessionBalance !== '0' ? `${sessionBalance} ytest.USD` : '0.1 ETH'
+
       const res = await fetch('/api/agents/council', {
         method: 'POST',
         headers,
         body: JSON.stringify({
           userPrompt: prompt,
-          context: { balance: '0.1 ETH', riskLevel: 'medium' },
+          context: { balance: balanceDisplay, riskLevel: 'medium' },
           deployedAgents: this.seats.map(s => ({ id: s.id, name: s.name })),
           ...(agentEndpoint && { agentEndpoint }),
         }),

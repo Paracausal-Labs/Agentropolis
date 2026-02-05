@@ -9,6 +9,7 @@ interface SwapResult {
   txHash?: string
   positionId?: string
   error?: string
+  warning?: string
   strategyType?: string
 }
 
@@ -29,9 +30,13 @@ export function SwapHandler() {
             status: 'success', 
             txHash: executionResult.txHash,
             positionId: executionResult.positionId,
+            warning: executionResult.warning,
             strategyType: executionResult.strategyType,
           })
           console.log('[SwapHandler] Strategy execution successful:', executionResult)
+          if (executionResult.warning) {
+            console.warn('[SwapHandler] Warning:', executionResult.warning)
+          }
         } else {
           throw new Error(executionResult.error || 'Execution failed')
         }
@@ -94,6 +99,9 @@ export function SwapHandler() {
       {result.status === 'success' && (
         <div className="text-green-500">
           <div className="font-bold">{actionLabel} Successful!</div>
+          {result.warning && (
+            <div className="text-yellow-500 text-sm mt-1">{result.warning}</div>
+          )}
           {result.positionId && (
             <div className="text-sm">Position ID: {result.positionId}</div>
           )}

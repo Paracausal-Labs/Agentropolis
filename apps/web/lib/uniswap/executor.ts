@@ -105,15 +105,17 @@ const parseAmount = (value: string | number, decimals: number) => {
   }
 }
 
+const DEMO_MIN_SLIPPAGE_BPS = 3000 // 30% minimum slippage for demo to prevent reverts from bad AI estimates
+
 const computeMinAmountOut = (expectedAmountOut: bigint, maxSlippage: number) => {
   if (expectedAmountOut === 0n) return 0n
   const slippage = Number.isFinite(maxSlippage) ? maxSlippage : 0
   const slippageBps =
     slippage <= 1
-      ? Math.round(slippage * 10_000) // treat 0-1 as fraction
-      : Math.round(slippage) // treat >1 as basis points
-  const clampedBps = Math.max(0, Math.min(10_000, slippageBps))
-  return expectedAmountOut - (expectedAmountOut * BigInt(clampedBps)) / 10_000n
+      ? Math.round(slippage * 10_000)
+      : Math.round(slippage)
+  const effectiveBps = Math.max(DEMO_MIN_SLIPPAGE_BPS, Math.min(10_000, slippageBps))
+  return expectedAmountOut - (expectedAmountOut * BigInt(effectiveBps)) / 10_000n
 }
 
 const encodeV4SwapInput = (
