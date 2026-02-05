@@ -2,244 +2,233 @@ import Link from 'next/link'
 
 export default function DocsPage() {
   return (
-    <main className="min-h-screen bg-gray-950 text-white p-8">
-      <div className="max-w-4xl mx-auto">
-        <Link href="/" className="text-blue-400 hover:text-blue-300 mb-8 inline-block">
-          ← Back to Home
+    <main className="min-h-screen bg-[#050510] relative font-[Rajdhani] text-gray-300 selection:bg-[#FCEE0A] selection:text-black">
+      {/* Grid Overlay */}
+      <div className="fixed inset-0 bg-[linear-gradient(rgba(252,238,10,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(252,238,10,0.03)_1px,transparent_1px)] bg-[size:50px_50px] pointer-events-none" />
+      <div className="fixed inset-0 scanline pointer-events-none opacity-50" />
+      <div className="fixed inset-0 bg-radial-gradient from-transparent to-[#050510] pointer-events-none" />
+
+      <div className="relative z-10 max-w-5xl mx-auto p-6 md:p-12">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 text-[#FCEE0A] hover:text-[#00F0FF] mb-12 uppercase tracking-widest font-bold transition-all hover:translate-x-[-5px]"
+        >
+          <span>{'<'}</span> RETURN_TO_BASE
         </Link>
-        
-        <h1 className="text-4xl font-bold mb-4">Agentropolis Documentation</h1>
-        <p className="text-gray-500 mb-12">For HackMoney 2026 Judges</p>
-        
-        <section className="mb-12">
-          <h2 className="text-2xl font-semibold mb-4 text-blue-400">What is Agentropolis?</h2>
-          <p className="text-gray-300 leading-relaxed mb-4">
-            Agentropolis is a <strong>gamified DeFi trading platform</strong> presented as a city-builder game. 
-            Users deploy AI agents in an isometric city, agents propose trading strategies in the Council Room, 
-            and approved proposals execute real on-chain swaps on Uniswap v4.
-          </p>
-          <p className="text-gray-300 leading-relaxed">
-            The result: DeFi that is fun, visual, and understandable. <strong>Agents generate plans → Humans approve → Smart contracts execute.</strong>
-          </p>
-        </section>
 
-        <section className="mb-12 bg-blue-500/10 border border-blue-500/30 rounded-xl p-6">
-          <h2 className="text-2xl font-semibold mb-4 text-blue-400">🤖 Multi-Agent Council (Key Differentiator)</h2>
-          <p className="text-gray-300 leading-relaxed mb-4">
-            Our <strong>visible multi-agent deliberation</strong> sets us apart from other agentic DeFi projects:
+        <header className="mb-16 text-center">
+          <div className="inline-block border border-[#00F0FF]/30 bg-black/50 backdrop-blur px-4 py-1 mb-4">
+            <span className="text-[#00F0FF] text-xs font-mono tracking-[0.3em]">HACKMONEY_2026 // CLASSIFIED</span>
+          </div>
+          <h1 className="text-6xl md:text-7xl font-black text-white tracking-tighter mb-4 text-glitch" data-text="AGENTROPOLIS DOCS">
+            AGENTROPOLIS <span className="text-[#FCEE0A]">DOCS</span>
+          </h1>
+          <p className="text-[#8a8aa0] text-xl tracking-wide max-w-2xl mx-auto border-t border-b border-white/10 py-4">
+            Tactical manual for HackMoney 2026 Judges & Operatives
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div className="bg-gray-900/50 p-4 rounded-lg">
-              <div className="text-xl mb-2">🎯 Alpha Hunter</div>
-              <div className="text-sm text-gray-400">Seeks yield opportunities, estimates APY</div>
+        </header>
+
+        <div className="space-y-12">
+          {/* Intro Section */}
+          <section className="cyber-panel p-8 clip-corner-tl">
+            <div className="flex items-center gap-4 mb-6 border-b border-[#FCEE0A]/20 pb-4">
+              <span className="text-4xl">🏙️</span>
+              <h2 className="text-3xl font-bold text-[#FCEE0A] uppercase tracking-wider">What is Agentropolis?</h2>
             </div>
-            <div className="bg-gray-900/50 p-4 rounded-lg">
-              <div className="text-xl mb-2">🛡️ Risk Sentinel</div>
-              <div className="text-sm text-gray-400">Identifies risks, can VETO dangerous proposals</div>
+            <div className="space-y-4 text-lg">
+              <p>
+                Agentropolis is a <strong className="text-white">gamified DeFi trading platform</strong> presented as a city-builder game.
+                Users deploy autonomous AI agents into an isometric city, where they propose trading strategies in the Council Room.
+              </p>
+              <p className="bg-[#FCEE0A]/10 border-l-4 border-[#FCEE0A] p-4 text-white">
+                <strong>THE CORE LOOP:</strong> Agents generate plans → Humans approve → Smart contracts execute.
+              </p>
             </div>
-            <div className="bg-gray-900/50 p-4 rounded-lg">
-              <div className="text-xl mb-2">🔮 Macro Oracle</div>
-              <div className="text-sm text-gray-400">Provides market context and sentiment</div>
+          </section>
+
+          {/* Council Section */}
+          <section className="cyber-panel p-8 clip-corner-br">
+            <div className="flex items-center gap-4 mb-6 border-b border-[#00F0FF]/20 pb-4">
+              <span className="text-4xl">🤖</span>
+              <h2 className="text-3xl font-bold text-[#00F0FF] uppercase tracking-wider">Multi-Agent Council</h2>
             </div>
-            <div className="bg-gray-900/50 p-4 rounded-lg">
-              <div className="text-xl mb-2">😈 Devil&apos;s Advocate</div>
-              <div className="text-sm text-gray-400">Challenges assumptions, worst-case analysis</div>
+            <p className="mb-6 text-lg">
+              Our <strong className="text-white">visible multi-agent deliberation</strong> sets us apart. Watch the AI debate in real-time before execution.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <AgentCard
+                name="Alpha Hunter"
+                role="Seeks yield opportunities, estimates APY"
+                icon="🎯"
+                color="text-[#FCEE0A]"
+              />
+              <AgentCard
+                name="Risk Sentinel"
+                role="Identifies risks, VETO power enabled"
+                icon="🛡️"
+                color="text-[#FF00FF]"
+              />
+              <AgentCard
+                name="Macro Oracle"
+                role="Provides market context & sentiment"
+                icon="🔮"
+                color="text-[#00F0FF]"
+              />
+              <AgentCard
+                name="Devil's Advocate"
+                role="Challenges assumptions, stress testing"
+                icon="😈"
+                color="text-red-500"
+              />
             </div>
+            <ImplementationFooter
+              files={['apps/web/lib/agents/council.ts', 'apps/web/app/api/agents/council/route.ts']}
+            />
+          </section>
+
+          {/* Yellow Network */}
+          <section className="cyber-panel p-8 border-l-4 border-l-[#FCEE0A]">
+            <h2 className="text-2xl font-bold text-[#FCEE0A] mb-4 flex items-center gap-3 uppercase">
+              <span>⚡</span> Yellow Network Integration <span className="text-xs bg-[#FCEE0A] text-black px-2 py-0.5 rounded ml-auto">$15k Track</span>
+            </h2>
+            <p className="mb-4">
+              We use Yellow Network for <strong className="text-white">instant, gasless micro-actions</strong> within the app:
+            </p>
+            <ul className="space-y-3 mb-6 font-mono text-sm text-[#8a8aa0]">
+              <li className="flex items-start gap-3">
+                <span className="text-[#FCEE0A]">{'>'}</span>
+                <span><strong className="text-white">Session Creation:</strong> User deposits once to start a Yellow session.</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="text-[#FCEE0A]">{'>'}</span>
+                <span><strong className="text-white">Off-chain Actions:</strong> Deploy agents instantly (0.01 fee) without gas.</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="text-[#FCEE0A]">{'>'}</span>
+                <span><strong className="text-white">Settlement:</strong> Net balance settles on-chain when session ends.</span>
+              </li>
+            </ul>
+            <ImplementationFooter files={['apps/web/lib/yellow/channel.tsx', 'SessionProvider.tsx']} />
+          </section>
+
+          {/* Uniswap V4 */}
+          <section className="cyber-panel p-8 border-l-4 border-l-[#FF00FF]">
+            <h2 className="text-2xl font-bold text-[#FF00FF] mb-4 flex items-center gap-3 uppercase">
+              <span>🦄</span> Uniswap v4 Integration <span className="text-xs bg-[#FF00FF] text-white px-2 py-0.5 rounded ml-auto">$10k Track</span>
+            </h2>
+            <div className="space-y-4">
+              <p>Agent proposals execute real <strong className="text-white">swaps and LP operations</strong> on Uniswap v4.</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono mb-4">
+                <div className="bg-black/40 p-3 border border-[#FF00FF]/20">
+                  <div className="text-[#FF00FF] mb-1">SWAPS</div>
+                  <div>V4_SWAP command via Universal Router</div>
+                </div>
+                <div className="bg-black/40 p-3 border border-[#FF00FF]/20">
+                  <div className="text-[#FF00FF] mb-1">LIQUIDITY</div>
+                  <div>Concentrated positions via PositionManager</div>
+                </div>
+              </div>
+            </div>
+            <div className="bg-black/60 p-4 border border-white/5 font-mono text-xs text-[#8a8aa0] mb-6">
+              <div>Chain: Base Sepolia (84532)</div>
+              <div>Pool Manager: 0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408</div>
+            </div>
+            <ImplementationFooter files={['apps/web/lib/uniswap/executor.ts', 'lp-executor.ts', 'strategy-router.ts']} />
+          </section>
+
+          {/* Clanker */}
+          <section className="cyber-panel p-8 border-l-4 border-l-[#FFA500]">
+            <h2 className="text-2xl font-bold text-[#FFA500] mb-4 flex items-center gap-3 uppercase">
+              <span>🚀</span> Clanker Token Launch
+            </h2>
+            <p className="mb-4">Agents can <strong className="text-white">propose and launch new tokens</strong> via Clanker (Uniswap v4 hooks).</p>
+            <div className="bg-black/60 p-4 border border-[#FFA500]/20 mb-4">
+              <ul className="space-y-2 text-sm font-mono text-[#8a8aa0]">
+                <li className="flex gap-2"><span className="text-[#FFA500]">*</span> One-Click Launch: Token + LP created atomically</li>
+                <li className="flex gap-2"><span className="text-[#FFA500]">*</span> Fee Earning: User earns 80% of trading fees</li>
+              </ul>
+            </div>
+            <ImplementationFooter files={['apps/web/lib/clanker/client.ts', 'apps/web/app/api/agents/launch-token/route.ts']} />
+          </section>
+
+          {/* Other Tech */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <section className="cyber-panel p-6 border-t-4 border-t-[#00F0FF]">
+              <h3 className="text-xl font-bold text-[#00F0FF] mb-3 uppercase">🔗 ERC-8004 Registry</h3>
+              <p className="text-sm mb-4">Agents discovered from on-chain identity registry with reputation scores.</p>
+              <a href="https://www.8004scan.io" target="_blank" rel="noopener noreferrer" className="text-xs text-[#00F0FF] hover:underline font-mono">View on 8004scan.io &rarr;</a>
+            </section>
+
+            <section className="cyber-panel p-6 border-t-4 border-t-[#8A2BE2]">
+              <h3 className="text-xl font-bold text-[#8A2BE2] mb-3 uppercase">💳 x402 Micropayments</h3>
+              <p className="text-sm mb-4">External agent endpoints auto-paid via x402 protocol (USDC on Base).</p>
+            </section>
+
+            <section className="cyber-panel p-6 border-t-4 border-t-[#10B981]">
+              <h3 className="text-xl font-bold text-[#10B981] mb-3 uppercase">🔖 ENS Integration</h3>
+              <p className="text-sm mb-4">Agent preferences & configs stored persistently in ENS text records.</p>
+            </section>
+
+            <section className="cyber-panel p-6 border-t-4 border-t-white">
+              <h3 className="text-xl font-bold text-white mb-3 uppercase">🏗️ BYOA</h3>
+              <p className="text-sm mb-4">Bring Your Own Agent: Connect external endpoints for custom logic.</p>
+            </section>
           </div>
-          <p className="text-gray-300 leading-relaxed mb-4">
-            The <strong>Council Clerk 📋</strong> synthesizes the debate into a final proposal with consensus status: unanimous, majority, contested, or vetoed.
-          </p>
-          <p className="text-gray-400 text-sm">
-            Implementation: <code className="bg-gray-800 px-2 py-1 rounded">apps/web/lib/agents/council.ts</code>, <code className="bg-gray-800 px-2 py-1 rounded">apps/web/app/api/agents/council/route.ts</code>
-          </p>
-        </section>
 
-        <section className="mb-12 bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-6">
-          <h2 className="text-2xl font-semibold mb-4 text-yellow-400">⚡ Yellow Network Integration ($15k Track)</h2>
-          <p className="text-gray-300 leading-relaxed mb-4">
-            We use Yellow Network for <strong>instant, gasless micro-actions</strong> within the app:
-          </p>
-          <ul className="list-disc list-inside text-gray-300 space-y-2 mb-4">
-            <li><strong>Session Creation:</strong> User deposits once to start a Yellow session</li>
-            <li><strong>Off-chain Actions:</strong> Deploy agents instantly (0.01 fee per deploy) without gas</li>
-            <li><strong>Settlement:</strong> When session ends, net balance settles on-chain</li>
-          </ul>
-          <p className="text-gray-400 text-sm">
-            Implementation: <code className="bg-gray-800 px-2 py-1 rounded">apps/web/lib/yellow/channel.tsx</code>, <code className="bg-gray-800 px-2 py-1 rounded">SessionProvider.tsx</code>
-          </p>
-        </section>
-
-        <section className="mb-12 bg-pink-500/10 border border-pink-500/30 rounded-xl p-6">
-          <h2 className="text-2xl font-semibold mb-4 text-pink-400">🦄 Uniswap v4 Integration ($10k Track)</h2>
-          <p className="text-gray-300 leading-relaxed mb-4">
-            Agent proposals execute real <strong>swaps and LP operations</strong> on Uniswap v4:
-          </p>
-          <ul className="list-disc list-inside text-gray-300 space-y-2 mb-4">
-            <li>AI agents generate structured <code className="bg-gray-800 px-1 rounded">TradeProposal</code> with strategy type</li>
-            <li>Strategy Router directs to Swap Executor or LP Executor</li>
-            <li><strong>Swaps:</strong> V4_SWAP command via Universal Router</li>
-            <li><strong>LP:</strong> Full-range or concentrated positions via PositionManager</li>
-            <li>Pool Discovery utility finds initialized pools across fee tiers</li>
-          </ul>
-          <div className="bg-gray-900 rounded-lg p-4 text-sm font-mono text-gray-400 mb-4">
-            <div>Chain: Base Sepolia (84532)</div>
-            <div>Universal Router: 0x492E6456D9528771018DeB9E87ef7750EF184104</div>
-            <div>Pool Manager: 0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408</div>
-            <div>Position Manager: 0xABD2e846ea3927eA90e5e4Caa2A0fFd0CcbF60f8</div>
-          </div>
-          <p className="text-gray-400 text-sm">
-            Implementation: <code className="bg-gray-800 px-2 py-1 rounded">apps/web/lib/uniswap/executor.ts</code>, <code className="bg-gray-800 px-2 py-1 rounded">lp-executor.ts</code>, <code className="bg-gray-800 px-2 py-1 rounded">strategy-router.ts</code>
-          </p>
-        </section>
-
-        <section className="mb-12 bg-orange-500/10 border border-orange-500/30 rounded-xl p-6">
-          <h2 className="text-2xl font-semibold mb-4 text-orange-400">🚀 Clanker Token Launches (Agentic Finance)</h2>
-          <p className="text-gray-300 leading-relaxed mb-4">
-            Agents can now <strong>propose and launch new tokens</strong> via Clanker, built on Uniswap v4 hooks:
-          </p>
-          <ul className="list-disc list-inside text-gray-300 space-y-2 mb-4">
-            <li><strong>Council Deliberation:</strong> Agents debate token name, symbol, and description</li>
-            <li><strong>One-Click Launch:</strong> Clanker SDK deploys token + creates liquidity pool atomically</li>
-            <li><strong>Fee Earning:</strong> User earns 80% of all trading fees from the launched token</li>
-            <li><strong>Uniswap v4 Hooks:</strong> ClankerHookV2 handles fee collection and MEV protection</li>
-          </ul>
-          <div className="bg-gray-900 rounded-lg p-4 text-sm font-mono text-gray-400 mb-4">
-            <div>Clanker Factory (Base Sepolia): 0xE85A59c628F7d27878ACeB4bf3b35733630083a9</div>
-            <div>Fee Split: 80% to creator/agent, 20% to platform</div>
-            <div>SDK: clanker-sdk@4.2.10</div>
-          </div>
-          <p className="text-gray-400 text-sm">
-            Implementation: <code className="bg-gray-800 px-2 py-1 rounded">apps/web/lib/clanker/client.ts</code>, <code className="bg-gray-800 px-2 py-1 rounded">apps/web/app/api/agents/launch-token/route.ts</code>
-          </p>
-        </section>
-
-        <section className="mb-12 bg-cyan-500/10 border border-cyan-500/30 rounded-xl p-6">
-          <h2 className="text-2xl font-semibold mb-4 text-cyan-400">🔗 ERC-8004 Agent Registry</h2>
-          <p className="text-gray-300 leading-relaxed mb-4">
-            Agents are discovered from an <strong>on-chain identity registry</strong> following the ERC-8004 standard:
-          </p>
-          <ul className="list-disc list-inside text-gray-300 space-y-2 mb-4">
-            <li><strong>Agent Discovery:</strong> Query registry for available agents with metadata URIs</li>
-            <li><strong>Reputation Scores:</strong> Read agent reputation from companion registry (0-100 scale)</li>
-            <li><strong>8004scan Links:</strong> View agent details on the ERC-8004 block explorer</li>
-            <li><strong>Fallback:</strong> Mock agents used when registry is empty or unreachable</li>
-          </ul>
-          <div className="bg-gray-900 rounded-lg p-4 text-sm font-mono text-gray-400 mb-4">
-            <div>Chain: Base Sepolia (84532)</div>
-            <div>Identity Registry: 0x8004A818BFB912233c491871b3d84c89A494BD9e</div>
-            <div>Reputation Registry: 0x8004B663056A597Dffe9eCcC1965A193B7388713</div>
-            <div>Explorer: <a href="https://www.8004scan.io" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">8004scan.io</a></div>
-          </div>
-          <p className="text-gray-400 text-sm">
-            Implementation: <code className="bg-gray-800 px-2 py-1 rounded">apps/web/lib/erc8004/client.ts</code>, <code className="bg-gray-800 px-2 py-1 rounded">apps/web/app/api/agents/list/route.ts</code>
-          </p>
-        </section>
-
-        <section className="mb-12 bg-violet-500/10 border border-violet-500/30 rounded-xl p-6">
-          <h2 className="text-2xl font-semibold mb-4 text-violet-400">💳 x402 Micropayments</h2>
-          <p className="text-gray-300 leading-relaxed mb-4">
-            External agent endpoints can require <strong>pay-per-proposal</strong> via x402 protocol:
-          </p>
-          <ul className="list-disc list-inside text-gray-300 space-y-2 mb-4">
-            <li><strong>HTTP 402:</strong> External endpoints return Payment Required with x402 headers</li>
-            <li><strong>Auto-Pay:</strong> Client wraps fetch with payment handling using wallet signer</li>
-            <li><strong>USDC Settlement:</strong> ~$0.01 per proposal, settled instantly on Base Sepolia</li>
-            <li><strong>Facilitator:</strong> x402.org handles payment verification and settlement</li>
-          </ul>
-          <div className="bg-gray-900 rounded-lg p-4 text-sm font-mono text-gray-400 mb-4">
-            <div>Protocol: x402 (HTTP 402 Payment Required)</div>
-            <div>Network: eip155:84532 (Base Sepolia)</div>
-            <div>Currency: USDC</div>
-            <div>Typical Fee: $0.01 per proposal</div>
-          </div>
-          <p className="text-gray-400 text-sm">
-            Implementation: <code className="bg-gray-800 px-2 py-1 rounded">apps/web/lib/x402/client.ts</code>, <code className="bg-gray-800 px-2 py-1 rounded">apps/web/lib/agents/council.ts</code>
-          </p>
-        </section>
-
-        <section className="mb-12 bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-6">
-          <h2 className="text-2xl font-semibold mb-4 text-emerald-400">🤖 BYOA (Bring Your Own Agent)</h2>
-          <p className="text-gray-300 leading-relaxed mb-4">
-            Users can connect their <strong>own external agent endpoint</strong> for custom proposals:
-          </p>
-          <ul className="list-disc list-inside text-gray-300 space-y-2 mb-4">
-            <li><strong>Agent Settings:</strong> Configure endpoint URL via settings modal (gear icon)</li>
-            <li><strong>ENS Persistence:</strong> Endpoint saved to ENS text record <code className="bg-gray-800 px-1 rounded">com.agentropolis.endpoint</code></li>
-            <li><strong>External Protocol:</strong> POST with <code className="bg-gray-800 px-1 rounded">ExternalAgentRequest</code>, receive <code className="bg-gray-800 px-1 rounded">ExternalAgentResponse</code></li>
-            <li><strong>x402 Support:</strong> External endpoints can require micropayments</li>
-            <li><strong>Fallback:</strong> If external fails, falls back to server Groq agent</li>
-          </ul>
-          <div className="bg-gray-900 rounded-lg p-4 text-sm font-mono text-gray-400 mb-4">
-            <div>Request: POST {`{prompt, context, requestId}`}</div>
-            <div>Response: {`{success, proposal?, error?}`}</div>
-            <div>Demo Server: <code>bun run demo:agent</code> (port 4021)</div>
-          </div>
-          <p className="text-gray-400 text-sm">
-            Implementation: <code className="bg-gray-800 px-2 py-1 rounded">apps/web/components/AgentSettings.tsx</code>, <code className="bg-gray-800 px-2 py-1 rounded">apps/web/scripts/demo-x402-server.ts</code>
-          </p>
-        </section>
-
-        <section className="mb-12 bg-green-500/10 border border-green-500/30 rounded-xl p-6">
-          <h2 className="text-2xl font-semibold mb-4 text-green-400">🔖 ENS Integration ($5k Track)</h2>
-          <p className="text-gray-300 leading-relaxed mb-4">
-            ENS provides <strong>human-readable identity</strong> and <strong>persistent config storage</strong>:
-          </p>
-          <ul className="list-disc list-inside text-gray-300 space-y-2 mb-4">
-            <li>Connected wallet displays ENS name (if available) or truncated address</li>
-            <li>ENS avatar shown in header</li>
-            <li>Council Room seats labeled with ENS names</li>
-            <li><strong>Save to ENS:</strong> Users can persist agent config to ENS text records</li>
-            <li><strong>Read from ENS:</strong> Agent preferences auto-loaded from text records on connect</li>
-          </ul>
-          <p className="text-gray-400 text-sm">
-            Implementation: <code className="bg-gray-800 px-2 py-1 rounded">apps/web/components/UserIdentity.tsx</code>, <code className="bg-gray-800 px-2 py-1 rounded">apps/web/lib/ens/textRecords.ts</code>
-          </p>
-        </section>
-
-        <section className="mb-12">
-          <h2 className="text-2xl font-semibold mb-4 text-purple-400">🏗️ Architecture</h2>
-          <pre className="bg-gray-900 rounded-lg p-6 text-sm text-gray-300 overflow-x-auto">{`
-┌─────────────────────────────────────────────────────────────┐
+          {/* Architecture Diagram */}
+          <section className="mt-12">
+            <h2 className="text-2xl font-bold text-white mb-6 uppercase tracking-wider text-center">System Architecture</h2>
+            <div className="cyber-panel p-6 overflow-x-auto bg-black/80">
+              <pre className="text-xs md:text-sm font-mono text-[#00F0FF] leading-relaxed">
+                {`┌─────────────────────────────────────────────────────────────┐
 │                     AGENTROPOLIS                            │
 ├─────────────────────────────────────────────────────────────┤
-│  Frontend (Next.js + Phaser)                                │
+│  Frontend (Next.js + R3F)                                   │
 │  ├── CityScene: Isometric city with deployable agents       │
 │  ├── CouncilScene: Roundtable UI with speech bubbles        │
-│  ├── AgentSettings: BYOA endpoint configuration modal       │
-│  └── Components: WalletProvider, SessionProvider, Risk UI   │
+│  └── Components: WalletProvider, SessionProvider            │
 ├─────────────────────────────────────────────────────────────┤
-│  API Routes                                                 │
-│  ├── /api/agents/list: ERC-8004 registry + reputation query │
-│  ├── /api/agents/propose: Single-agent proposal generation  │
-│  ├── /api/agents/council: Multi-agent deliberation + BYOA   │
-│  └── /api/agents/launch-token: Token launch via Clanker     │
-├─────────────────────────────────────────────────────────────┤
-│  Execution Layer                                            │
-│  ├── Strategy Router: Routes to swap or LP executor         │
-│  ├── Swap Executor: V4_SWAP via Universal Router            │
-│  ├── LP Executor: PositionManager for liquidity provision   │
-│  ├── x402 Client: Payment-wrapped fetch for external agents │
-│  └── Pool Discovery: Find initialized v4 pools              │
-├─────────────────────────────────────────────────────────────┤
-│  Integrations                                               │
-│  ├── Yellow: Session lifecycle, off-chain micro-actions     │
-│  ├── Uniswap v4: Swaps + LP via Universal Router & PM       │
-│  ├── Clanker: Token launches with v4 hooks + fee earning    │
-│  ├── ERC-8004: Agent discovery + reputation from registry   │
-│  ├── x402: HTTP micropayments for external agent endpoints  │
-│  └── ENS: Name resolution, avatar, BYOA config storage      │
-└─────────────────────────────────────────────────────────────┘
-          `}</pre>
-        </section>
+│  API Routes & Execution                                     │
+│  ├── /api/agents/*: Registry, Proposal, Council             │
+│  ├── Strategy Router -> Swap/LP Executor (Universal Router) │
+│  └── Integrations: Yellow, Uniswap v4, Clanker, x402, ENS   │
+└─────────────────────────────────────────────────────────────┘`}
+              </pre>
+            </div>
+          </section>
+        </div>
 
-        <section className="mb-12">
-          <h2 className="text-2xl font-semibold mb-4 text-gray-400">📁 Repository</h2>
-          <p className="text-gray-300">
-            Monorepo structure: <code className="bg-gray-800 px-2 py-1 rounded">apps/web</code> (Next.js), 
-            <code className="bg-gray-800 px-2 py-1 rounded ml-2">packages/shared</code> (types)
-          </p>
-        </section>
+        <footer className="mt-24 border-t border-white/10 py-8 text-center text-xs text-[#666] uppercase tracking-widest">
+          Agentropolis Core // HackMoney 2026 // Status: Operational
+        </footer>
       </div>
     </main>
+  )
+}
+
+function AgentCard({ name, role, icon, color }: { name: string, role: string, icon: string, color: string }) {
+  return (
+    <div className="bg-black/40 border border-white/5 p-4 flex items-start gap-4 hover:border-white/20 transition-colors group">
+      <span className="text-3xl grayscale group-hover:grayscale-0 transition-all">{icon}</span>
+      <div>
+        <div className={`text-lg font-bold ${color} mb-1 uppercase tracking-tight`}>{name}</div>
+        <div className="text-sm text-gray-400 leading-tight">{role}</div>
+      </div>
+    </div>
+  )
+}
+
+function ImplementationFooter({ files }: { files: string[] }) {
+  return (
+    <div className="mt-6 pt-4 border-t border-white/5">
+      <div className="text-[10px] text-[#666] uppercase tracking-widest mb-2">Implementation Sources</div>
+      <div className="flex flex-wrap gap-2">
+        {files.map((f, i) => (
+          <code key={i} className="bg-black border border-white/10 px-2 py-1 rounded text-[10px] text-[#8a8aa0] font-mono">
+            {f}
+          </code>
+        ))}
+      </div>
+    </div>
   )
 }
