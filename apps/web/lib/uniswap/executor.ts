@@ -13,7 +13,7 @@ import {
 import { baseSepolia } from 'viem/chains'
 import type { TradeProposal } from '@agentropolis/shared/src/types'
 import { CONTRACTS, POOL_KEY, RPC_URL, TOKEN_DECIMALS } from './constants'
-import { getPoolInfo, type PoolKey, findInitializedPool } from './pools'
+import { computePoolId, type PoolKey } from './pools'
 
 const UNIVERSAL_ROUTER_ABI = [
   {
@@ -219,35 +219,8 @@ export const executeSwap = async (
     transport: http(RPC_URL),
   })
 
-  const poolInfo = await getPoolInfo(POOL_KEY as PoolKey)
-  console.log('[uniswap] Pool info:', {
-    poolId: poolInfo.poolId,
-    isInitialized: poolInfo.isInitialized,
-    liquidity: poolInfo.liquidity.toString(),
-    tick: poolInfo.tick,
-  })
-
-  if (!poolInfo.isInitialized) {
-    const alternativePool = await findInitializedPool(
-      proposal.pair.tokenIn.address as Address,
-      proposal.pair.tokenOut.address as Address
-    )
-    
-    if (!alternativePool) {
-      console.error('[uniswap] No initialized pool found for USDC/WETH on Base Sepolia')
-      throw new Error('No initialized pool found. The USDC/WETH pool may not exist on Base Sepolia testnet.')
-    }
-    
-    console.log('[uniswap] Found alternative pool:', {
-      fee: alternativePool.fee,
-      tickSpacing: alternativePool.tickSpacing,
-      liquidity: alternativePool.liquidity.toString(),
-    })
-  }
-
-  if (poolInfo.liquidity === 0n) {
-    console.warn('[uniswap] Pool has zero liquidity - swap will likely fail')
-  }
+  const poolId = computePoolId(POOL_KEY as PoolKey)
+  console.log('[uniswap] Executing swap on pool:', poolId)
 
   const amountIn = parseAmount(
     proposal.amountIn,
@@ -257,6 +230,19 @@ export const executeSwap = async (
     proposal.expectedAmountOut,
     getTokenDecimals(proposal.pair.tokenOut.address)
   )
+
+  if (amountIn <= 0n) {
+    throw new Error('Invalid amountIn: must be greater than 0')
+  }
+
+  const nowSeconds = Math.floor(Date.now() / 1000)
+  const deadlineSeconds = proposal.deadline > 1_000_000_000_000
+    ? Math.floor(proposal.deadline / 1000)
+    : proposal.deadline
+  if (deadlineSeconds <= nowSeconds) {
+    throw new Error('Proposal deadline has expired')
+  }
+
   const minAmountOut = computeMinAmountOut(expectedAmountOut, proposal.maxSlippage)
 
   const tokenIn = proposal.pair.tokenIn.address.toLowerCase()
@@ -285,11 +271,6 @@ export const executeSwap = async (
   const swapInput = encodeV4SwapInput(account, amountIn, minAmountOut, zeroForOne)
   const commands: Hex = `0x${V4_SWAP_COMMAND.toString(16).padStart(2, '0')}`
   const inputs: Hex[] = [swapInput]
-
-  const deadlineSeconds =
-    proposal.deadline > 1_000_000_000_000
-      ? Math.floor(proposal.deadline / 1000)
-      : proposal.deadline
 
   const txHash = await walletClient.writeContract({
     address: CONTRACTS.UNIVERSAL_ROUTER,

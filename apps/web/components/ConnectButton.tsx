@@ -11,6 +11,7 @@ export function ConnectButton() {
   const { disconnect } = useDisconnect()
   const { switchChain } = useSwitchChain()
 
+  // CHAIN CONSTRAINT: Trading/Yellow = Base Sepolia, ENS writes = Ethereum Sepolia (separate flow)
   const isWrongChain = isConnected && chain?.id !== baseSepolia.id
   
   const handleConnect = (connector: Connector) => {

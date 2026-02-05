@@ -1,4 +1,4 @@
-import Phaser from 'phaser'
+import * as Phaser from 'phaser'
 import type { CouncilMessage, DeliberationResult } from '@agentropolis/shared'
 
 const AGENT_EMOJIS: Record<string, string> = {

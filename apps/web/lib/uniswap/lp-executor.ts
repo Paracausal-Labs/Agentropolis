@@ -143,6 +143,8 @@ const encodeMintParams = (params: LPParams): Hex => {
         },
         tickLower: params.tickLower,
         tickUpper: params.tickUpper,
+        // TODO: Production needs proper liquidity calculation using SqrtPriceMath
+        // Currently using amount0Desired as liquidity which is incorrect for production
         liquidity: params.amount0Desired,
         amount0Max: params.amount0Desired,
         amount1Max: params.amount1Desired,

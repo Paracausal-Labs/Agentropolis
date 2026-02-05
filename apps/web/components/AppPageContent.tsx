@@ -4,7 +4,6 @@ import { Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import PhaserGame from '@/components/game/PhaserGame'
 import { ConnectButton } from '@/components/ConnectButton'
-import { UserIdentity } from '@/components/UserIdentity'
 import { AgentSettingsButton } from '@/components/AgentSettings'
 import { SessionStatus } from '@/components/SessionProvider'
 import { SwapHandler } from '@/components/SwapHandler'
@@ -20,7 +19,6 @@ function AppPageContentInner() {
         <h1 className="text-xl font-bold text-white">Agentropolis</h1>
         <div className="flex items-center gap-4">
           <SessionStatus />
-          <UserIdentity />
           <AgentSettingsButton />
           <ConnectButton />
         </div>
