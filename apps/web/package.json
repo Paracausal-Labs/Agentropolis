@@ -10,7 +10,8 @@
     "type-check": "tsc --noEmit",
     "demo:agent": "MOCK_MODE=true bun run scripts/demo-x402-server.ts",
     "demo:agent:x402": "bun run scripts/demo-x402-server.ts",
-    "test:e2e": "bun run scripts/test-x402-erc8004.ts"
+    "test:e2e": "bun run scripts/test-x402-erc8004.ts",
+    "init:pool": "bun run scripts/init-pool.ts"
   },
   "dependencies": {
     "@agentropolis/shared": "workspace:*",
