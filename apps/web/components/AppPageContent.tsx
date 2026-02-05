@@ -9,7 +9,10 @@ const CouncilRoom3D = dynamic(() => import('./game/CouncilRoom3D'), { ssr: false
 
 type GameScene = 'city' | 'council'
 
+import { useGame } from '@/contexts/GameContext'
+
 export function AppPageContent() {
+  const { state } = useGame()
   const [currentScene, setCurrentScene] = useState<GameScene>('city')
   const [isTransitioning, setIsTransitioning] = useState(false)
 
@@ -59,7 +62,7 @@ export function AppPageContent() {
             {/* Balance */}
             <div className="cyber-panel px-6 py-2 min-w-[140px]">
               <span className="text-[10px] text-[#FCEE0A] uppercase tracking-wider block mb-0.5">Wallet Balance</span>
-              <span className="text-xl font-mono text-white tracking-wide">0.95 <span className="text-gray-500 text-sm">ETH</span></span>
+              <span className="text-xl font-mono text-white tracking-wide">{state.ytestBalance.toFixed(3)} <span className="text-gray-500 text-sm">YES</span></span>
             </div>
 
             {/* Connect */}

@@ -1,233 +1,373 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
-import { Text } from '@react-three/drei'
-import * as THREE from 'three'
+import { useState } from 'react'
 import Scene3D from './Scene3D'
 import { Agent3D } from './3d/Agents'
 import { COLORS, AGENT_TYPES, PRESET_PROMPTS } from '@/lib/game-constants'
+import { useGame } from '@/contexts/GameContext'
 
-interface Opinion {
-    agent: string
-    stance: 'support' | 'concern' | 'oppose' | 'neutral'
-    reasoning: string
-}
-
-interface Proposal {
-    action: string
-    amount: string
-    expected: string
-    risk: 'low' | 'medium' | 'high'
-    reasoning: string
-    votes: {
-        support: number
-        oppose: number
-        abstain: number
-    }
-    consensus: 'unanimous' | 'majority' | 'contested' | 'vetoed'
+interface ChatMessage {
+    id: string
+    sender: 'user' | 'agent'
+    text: string
 }
 
 export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
+    const { actions } = useGame()
+
+    // Interaction State
+    const [selectedAgent, setSelectedAgent] = useState<string | null>(null)
+    const [hoveredAgent, setHoveredAgent] = useState<string | null>(null)
+    const [interactions, setInteractions] = useState<{
+        [key: string]: { hasIntroduced: boolean, chatHistory: ChatMessage[] }
+    }>({})
+
+    // Deliberation State
     const [currentPrompt, setCurrentPrompt] = useState('')
     const [isDeliberating, setIsDeliberating] = useState(false)
-    const [opinions, setOpinions] = useState<Opinion[]>([])
-    const [proposal, setProposal] = useState<Proposal | null>(null)
+    const [opinions, setOpinions] = useState<any[]>([])
+    const [proposal, setProposal] = useState<any | null>(null)
     const [speakingAgent, setSpeakingAgent] = useState<string | null>(null)
 
-    const handleConsult = useCallback(async () => {
+    // Handlers
+    const handleAgentClick = (agentId: string) => {
+        if (agentId === 'user') return
+        setSelectedAgent(agentId)
+
+        // Initialize interaction state if new
+        if (!interactions[agentId]) {
+            setInteractions(prev => ({
+                ...prev,
+                [agentId]: { hasIntroduced: false, chatHistory: [] }
+            }))
+        }
+    }
+
+    const handleStartChat = () => {
+        if (selectedAgent && !interactions[selectedAgent].hasIntroduced) {
+            setInteractions(prev => ({
+                ...prev,
+                [selectedAgent]: { ...prev[selectedAgent], hasIntroduced: true }
+            }))
+        }
+    }
+
+    const handleSendMessage = (text: string) => {
+        if (!selectedAgent) return
+
+        const newHistory = [
+            ...(interactions[selectedAgent]?.chatHistory || []),
+            { id: Date.now().toString(), sender: 'user', text } as ChatMessage
+        ]
+
+        // Mock Agent Response
+        setTimeout(() => {
+            const agentType = AGENT_TYPES[selectedAgent as keyof typeof AGENT_TYPES]
+            const responseText = `As a ${agentType.role}, I think "${text}" is interesting. ${agentType.catchphrase}`
+
+            setInteractions(prev => ({
+                ...prev,
+                [selectedAgent]: {
+                    ...prev[selectedAgent],
+                    chatHistory: [
+                        ...newHistory,
+                        { id: (Date.now() + 1).toString(), sender: 'agent', text: responseText } as ChatMessage
+                    ]
+                }
+            }))
+        }, 1000)
+
+        setInteractions(prev => ({
+            ...prev,
+            [selectedAgent]: { ...prev[selectedAgent], chatHistory: newHistory }
+        }))
+    }
+
+    const handleConsult = async () => {
         if (!currentPrompt.trim()) return
 
         setIsDeliberating(true)
         setOpinions([])
         setProposal(null)
+        actions.startDeliberation()
 
-        // Mock deliberation sequence
-        const agents = ['alphaHunter', 'riskSentinel', 'macroOracle', 'devilsAdvocate', 'councilClerk']
+        // Mock Sequence
+        const activeAgents = ['alphaHunter', 'riskSentinel', 'macroOracle', 'devilsAdvocate', 'councilClerk']
 
-        for (let i = 0; i < agents.length; i++) {
-            await new Promise((resolve) => setTimeout(resolve, 2000))
+        for (const agentId of activeAgents) {
+            await new Promise(r => setTimeout(r, 1500))
+            setSpeakingAgent(agentId)
 
-            setSpeakingAgent(agents[i])
-
-            const mockOpinion: Opinion = {
-                agent: agents[i],
-                stance: i === 1 ? 'concern' : i === 3 ? 'oppose' : 'support',
-                reasoning: getMockReasoning(agents[i], currentPrompt),
+            const opinion = {
+                agent: agentId,
+                stance: Math.random() > 0.5 ? 'support' : 'concern',
+                reasoning: `My analysis of "${currentPrompt}" suggests ${Math.random() > 0.5 ? 'positive' : 'mixed'} outcomes.`
             }
-
-            setOpinions((prev) => [...prev, mockOpinion])
-
-            await new Promise((resolve) => setTimeout(resolve, 1000))
+            setOpinions(prev => [...prev, opinion])
+            await new Promise(r => setTimeout(r, 1000))
             setSpeakingAgent(null)
         }
 
-        // Generate proposal
-        await new Promise((resolve) => setTimeout(resolve, 500))
-        setProposal({
-            action: 'Swap 0.1 WETH → USDC',
-            amount: '0.1 WETH (~$330)',
-            expected: '~328 USDC (0.5% slippage)',
-            risk: 'medium',
-            reasoning: 'Based on current market conditions and your moderate risk profile, swapping to USDC provides stability while ETH shows volatility signs...',
-            votes: { support: 3, oppose: 1, abstain: 0 },
-            consensus: 'majority',
-        })
-
+        // Final Proposal
+        await new Promise(r => setTimeout(r, 500))
+        const newProposal = {
+            id: 'prop-' + Date.now(),
+            action: 'Execute Generated Strategy',
+            inputToken: 'ETH',
+            outputToken: 'USDC',
+            inputAmount: '0.1',
+            expectedOutput: '320 USDC',
+            slippage: 0.5,
+            risk: 'medium' as const,
+            reasoning: 'Council consensus achieved. Proceed with caution.',
+            votes: { support: 3, oppose: 1, abstain: 1 },
+            consensus: 'majority' as const,
+            status: 'pending' as const,
+            timestamp: Date.now()
+        }
+        setProposal(newProposal)
+        actions.addProposal(newProposal)
         setIsDeliberating(false)
-    }, [currentPrompt])
-
-    const handleApprove = () => {
-        // Mock approval - show success state
-        alert('✅ Trade approved! (Mock - no real transaction)')
-        setProposal(null)
-        setOpinions([])
-    }
-
-    const handleReject = () => {
-        setProposal(null)
-        setOpinions([])
     }
 
     return (
-        <div className="w-full h-full relative">
+        <div className="w-full h-full relative font-[Rajdhani]">
             {/* 3D Scene */}
             <Scene3D
-                cameraPosition={[0, 8, 12]}
+                cameraPosition={[0, 5.5, 8.5]}
                 cameraMode="orbital"
                 enablePostProcessing
             >
-                {/* Table */}
+                {/* Environment */}
                 <RoundTable />
-
-                {/* Agent Positions around table */}
-                <Agent3D position={[0, 0.5, -3]} agentType="alphaHunter" scale={0.8} />
-                <Agent3D position={[2.5, 0.5, -1.5]} agentType="riskSentinel" scale={0.8} />
-                <Agent3D position={[2.5, 0.5, 1.5]} agentType="macroOracle" scale={0.8} />
-                <Agent3D position={[0, 0.5, 3]} agentType="devilsAdvocate" scale={0.8} />
-                <Agent3D position={[-2.5, 0.5, 1.5]} agentType="councilClerk" scale={0.8} />
-                <Agent3D position={[-2.5, 0.5, -1.5]} agentType="user" scale={0.8} />
-
-                {/* Speaking indicator */}
-                {speakingAgent && (
-                    <SpeakingIndicator
-                        position={getAgentPosition(speakingAgent)}
-                        color={AGENT_TYPES[speakingAgent as keyof typeof AGENT_TYPES]?.color || COLORS.neon.cyan}
-                    />
-                )}
-
                 {/* Floor */}
                 <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, 0]} receiveShadow>
-                    <planeGeometry args={[20, 20]} />
-                    <meshStandardMaterial color={COLORS.bg.secondary} />
+                    <circleGeometry args={[12, 64]} />
+                    <meshStandardMaterial color={COLORS.bg.secondary} roughness={0.5} metalness={0.5} />
+                    <gridHelper args={[20, 20, '#444', '#111']} rotation={[Math.PI / 2, 0, 0]} position={[0, 0.01, 0]} />
                 </mesh>
+
+                {/* Agents */}
+                <Agent3D
+                    position={[0, 0.5, -4]}
+                    agentType="alphaHunter"
+                    rotation={0}
+                    isSelected={selectedAgent === 'alphaHunter'}
+                    isHovered={hoveredAgent === 'alphaHunter'}
+                    onClick={() => handleAgentClick('alphaHunter')}
+                    onPointerOver={() => setHoveredAgent('alphaHunter')}
+                    onPointerOut={() => setHoveredAgent(null)}
+                />
+                <Agent3D
+                    position={[3.5, 0.5, -2]}
+                    agentType="riskSentinel"
+                    rotation={-Math.PI / 3}
+                    isSelected={selectedAgent === 'riskSentinel'}
+                    isHovered={hoveredAgent === 'riskSentinel'}
+                    onClick={() => handleAgentClick('riskSentinel')}
+                    onPointerOver={() => setHoveredAgent('riskSentinel')}
+                    onPointerOut={() => setHoveredAgent(null)}
+                />
+                <Agent3D
+                    position={[3.5, 0.5, 2]}
+                    agentType="macroOracle"
+                    rotation={-2 * Math.PI / 3}
+                    isSelected={selectedAgent === 'macroOracle'}
+                    isHovered={hoveredAgent === 'macroOracle'}
+                    onClick={() => handleAgentClick('macroOracle')}
+                    onPointerOver={() => setHoveredAgent('macroOracle')}
+                    onPointerOut={() => setHoveredAgent(null)}
+                />
+                <Agent3D
+                    position={[0, 0.5, 4]}
+                    agentType="devilsAdvocate"
+                    rotation={Math.PI}
+                    isSelected={selectedAgent === 'devilsAdvocate'}
+                    isHovered={hoveredAgent === 'devilsAdvocate'}
+                    onClick={() => handleAgentClick('devilsAdvocate')}
+                    onPointerOver={() => setHoveredAgent('devilsAdvocate')}
+                    onPointerOut={() => setHoveredAgent(null)}
+                />
+                <Agent3D
+                    position={[-3.5, 0.5, 2]}
+                    agentType="councilClerk"
+                    rotation={2 * Math.PI / 3}
+                    isSelected={selectedAgent === 'councilClerk'}
+                    isHovered={hoveredAgent === 'councilClerk'}
+                    onClick={() => handleAgentClick('councilClerk')}
+                    onPointerOver={() => setHoveredAgent('councilClerk')}
+                    onPointerOut={() => setHoveredAgent(null)}
+                />
+                <Agent3D
+                    position={[-3.5, 0.5, -2]}
+                    agentType="user"
+                    rotation={Math.PI / 3}
+                    showNameTag
+                />
+
+                {/* Speaking Indicator */}
+                {speakingAgent && (
+                    <mesh position={[0, 4, 0]}>
+                        <octahedronGeometry args={[0.5]} />
+                        <meshBasicMaterial color={COLORS.neon.yellow} wireframe />
+                    </mesh>
+                )}
             </Scene3D>
 
             {/* UI Overlay */}
-            <div className="absolute inset-0 pointer-events-none font-[Rajdhani]">
-                {/* Header - CYBER REDESIGN */}
-                <div className="p-4 pt-24 pointer-events-auto">
-                    <div className="flex justify-between items-start">
-                        <div className="cyber-panel px-6 py-3 clip-corner-tr flex items-center gap-4">
-                            <span className="text-3xl filter drop-shadow-[0_0_8px_rgba(252,238,10,0.6)]">🏛️</span>
-                            <div>
-                                <h1 className="text-2xl font-black text-white uppercase tracking-widest leading-none">
-                                    COUNCIL_CHAMBER
-                                </h1>
-                                <p className="text-[10px] text-[#00F0FF] font-mono mt-0.5 tracking-wide">
-                                    // SEQUENCING_DELIBERATION_PROTOCOL
-                                </p>
-                            </div>
-                        </div>
-                        <button
-                            onClick={onBack}
-                            className="btn-cyber-outline py-2 px-6 h-auto text-sm clip-corner-tr bg-black/60 hover:bg-[#FCEE0A] hover:text-black transition-all"
-                        >
-                            {'<'} RETURN_TO_CITY
-                        </button>
+            <div className="absolute inset-0 pointer-events-none">
+                {/* Header */}
+                <div className="absolute top-4 left-4 pointer-events-auto">
+                    <button onClick={onBack} className="btn-cyber-outline px-6 py-2 bg-black/80">
+                        {'<'} EXIT_CHAMBER
+                    </button>
+                    <div className="mt-4 cyber-panel p-4 bg-black/60 backdrop-blur w-64">
+                        <h1 className="text-xl font-bold text-[#FCEE0A] uppercase tracking-widest">Council Chamber</h1>
+                        <p className="text-xs text-gray-400 mt-1">Select an agent to interact or start a general deliberation.</p>
                     </div>
                 </div>
 
-                {/* Speech bubbles */}
-                {opinions.map((opinion, idx) => (
-                    <SpeechBubble
-                        key={idx}
-                        agent={opinion.agent}
-                        stance={opinion.stance}
-                        reasoning={opinion.reasoning}
-                        isActive={idx === opinions.length - 1}
-                    />
-                ))}
-
-                {/* Bottom Panel - Prompt Input - CYBER REDESIGN */}
-                <div className="absolute bottom-0 left-0 right-0 p-6 pointer-events-auto">
-                    <div className="max-w-5xl mx-auto">
-                        <div className="cyber-panel clip-corner-all p-1">
-                            {/* Header */}
-                            <div className="bg-[#FCEE0A]/10 border-b border-[#FCEE0A]/30 px-6 py-3 flex justify-between items-center">
-                                <h3 className="text-sm font-bold text-[#FCEE0A] tracking-widest leading-none flex items-center gap-2">
-                                    <span className="w-2 h-2 bg-[#FCEE0A] animate-pulse"></span>
-                                    COMMAND_INTERFACE
-                                </h3>
-                                <p className="text-[10px] text-gray-400 font-mono">
-                                    STATUS: AWAITING_INPUT
-                                </p>
-                            </div>
-
-                            {/* Content */}
-                            <div className="p-6 bg-black/40">
-                                {/* Preset Buttons */}
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-                                    {PRESET_PROMPTS.map((preset) => (
-                                        <button
-                                            key={preset.label}
-                                            onClick={() => setCurrentPrompt(preset.prompt)}
-                                            className="group relative px-4 py-3 bg-[#050510] border border-[#FCEE0A]/30 hover:border-[#FCEE0A] text-white text-left transition-all hover:bg-[#FCEE0A]/10"
-                                        >
-                                            <div className="absolute top-0 right-0 w-2 h-2 border-t border-r border-[#FCEE0A] group-hover:w-full group-hover:h-full transition-all duration-300"></div>
-                                            <div className="flex flex-col">
-                                                <span className="text-xl mb-1">{preset.emoji}</span>
-                                                <span className="text-[10px] text-[#00F0FF] font-mono mb-0.5">{preset.label.split(':')[0]}</span>
-                                                <span className="text-xs font-bold tracking-wide">{preset.label.split(':')[1]}</span>
-                                            </div>
-                                        </button>
-                                    ))}
+                {/* Right Panel: Chat or Intro */}
+                {selectedAgent && (
+                    <div className="absolute top-4 right-4 bottom-24 w-96 bg-black/90 border-l border-[#FCEE0A] pointer-events-auto flex flex-col clip-corner-bl transition-all animate-in slide-in-from-right">
+                        {interactions[selectedAgent]?.hasIntroduced ? (
+                            // Chat Interface
+                            <div className="flex flex-col h-full">
+                                <div className="p-4 border-b border-[#FCEE0A]/30 flex justify-between items-center bg-[#FCEE0A]/10">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                                        <span className="font-bold text-[#FCEE0A] uppercase tracking-wider">{AGENT_TYPES[selectedAgent as keyof typeof AGENT_TYPES].name}</span>
+                                    </div>
+                                    <button onClick={() => setSelectedAgent(null)} className="text-gray-500 hover:text-white">✕</button>
                                 </div>
-
-                                {/* Input */}
-                                <div className="flex gap-4">
-                                    <div className="flex-1 relative">
+                                <div className="flex-1 p-4 overflow-y-auto space-y-4">
+                                    {interactions[selectedAgent].chatHistory.map(msg => (
+                                        <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                            <div className={`max-w-[80%] p-3 text-sm ${msg.sender === 'user' ? 'bg-[#FCEE0A]/20 text-white border border-[#FCEE0A]/50 clip-corner-br' : 'bg-gray-800 text-gray-200 border border-gray-700 clip-corner-bl'}`}>
+                                                {msg.text}
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {interactions[selectedAgent].chatHistory.length === 0 && (
+                                        <div className="mt-8 space-y-2">
+                                            <div className="text-center text-gray-500 text-xs mb-4">SUGGESTED QUERIES</div>
+                                            {PRESET_PROMPTS.map((prompt, i) => (
+                                                <button
+                                                    key={i}
+                                                    onClick={() => handleSendMessage(prompt.prompt)}
+                                                    className="w-full text-left p-2 bg-[#FCEE0A]/5 border border-[#FCEE0A]/20 text-[#FCEE0A] text-xs hover:bg-[#FCEE0A]/20 transition-colors"
+                                                >
+                                                    {prompt.emoji} {prompt.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="p-4 border-t border-gray-800">
+                                    <div className="flex gap-2">
                                         <input
                                             type="text"
-                                            value={currentPrompt}
-                                            onChange={(e) => setCurrentPrompt(e.target.value)}
-                                            placeholder="ENTER_COMMAND_PARAMETERS..."
-                                            className="w-full px-6 py-4 bg-[#050510] text-[#00F0FF] border border-[#FCEE0A]/30 focus:border-[#FCEE0A] focus:outline-none focus:bg-[#FCEE0A]/5 font-mono tracking-wide placeholder-gray-600 clip-corner-tr"
-                                            disabled={isDeliberating}
+                                            placeholder="Transmission contents..."
+                                            className="flex-1 bg-black border border-gray-700 p-2 text-sm text-white focus:border-[#FCEE0A] outline-none"
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    handleSendMessage((e.target as HTMLInputElement).value);
+                                                    (e.target as HTMLInputElement).value = '';
+                                                }
+                                            }}
                                         />
-                                        <div className="absolute right-3 bottom-2 text-[10px] text-[#FCEE0A]/50 font-mono">_</div>
+                                        <button className="px-3 bg-[#FCEE0A] text-black font-bold text-sm hover:bg-white transition-colors">
+                                            SEND
+                                        </button>
                                     </div>
+                                </div>
+                            </div>
+                        ) : (
+                            // Introduction Panel
+                            <div className="p-8 flex flex-col h-full justify-center text-center">
+                                <div className="text-6xl mb-6">{AGENT_TYPES[selectedAgent as keyof typeof AGENT_TYPES].emoji}</div>
+                                <h2 className="text-3xl font-black text-white uppercase mb-2 tracking-widest">
+                                    {AGENT_TYPES[selectedAgent as keyof typeof AGENT_TYPES].name}
+                                </h2>
+                                <h3 className="text-[#00F0FF] font-mono text-sm mb-6 tracking-wider">
+                                    STATUS: ONLINE
+                                </h3>
+                                <p className="text-gray-300 italic mb-8 border-l-2 border-[#FCEE0A] pl-4 text-left">
+                                    "{AGENT_TYPES[selectedAgent as keyof typeof AGENT_TYPES].catchphrase}"
+                                </p>
+                                <div className="space-y-4">
                                     <button
-                                        onClick={handleConsult}
-                                        disabled={isDeliberating || !currentPrompt.trim()}
-                                        className="btn-cyber w-64 clip-corner-tr disabled:opacity-50 disabled:grayscale"
+                                        onClick={handleStartChat}
+                                        className="w-full btn-cyber h-12"
                                     >
-                                        {isDeliberating ? 'PROCESSING...' : 'EXECUTE >>'}
+                                        ESTABLISH UPLINK
+                                    </button>
+                                    <button
+                                        onClick={() => setSelectedAgent(null)}
+                                        className="w-full text-gray-500 text-xs hover:text-white uppercase tracking-widest"
+                                    >
+                                        Terminate Connection
                                     </button>
                                 </div>
                             </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Bottom Center: Deliberation Controls */}
+                {!selectedAgent && !proposal && (
+                    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-full max-w-3xl pointer-events-auto">
+                        <div className="mb-2 flex gap-2 justify-center">
+                            {PRESET_PROMPTS.map((p, i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => setCurrentPrompt(p.prompt)}
+                                    className="btn-cyber-outline text-[10px] py-1 px-3 bg-black/60 hover:bg-[#FCEE0A]/20"
+                                >
+                                    {p.emoji} {p.label}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="cyber-panel p-1 bg-black/90 clip-corner-all">
+                            <div className="p-4 flex gap-4">
+                                <input
+                                    type="text"
+                                    value={currentPrompt}
+                                    onChange={(e) => setCurrentPrompt(e.target.value)}
+                                    placeholder="Enter proposal for council deliberation..."
+                                    className="flex-1 bg-transparent border-b border-[#FCEE0A]/50 px-4 py-2 text-[#FCEE0A] placeholder-gray-600 focus:outline-none focus:border-[#FCEE0A]"
+                                    disabled={isDeliberating}
+                                />
+                                <button
+                                    onClick={handleConsult}
+                                    disabled={isDeliberating || !currentPrompt}
+                                    className="btn-cyber px-8 disabled:opacity-50"
+                                >
+                                    {isDeliberating ? 'DELIBERATING...' : 'CONVENE COUNCIL'}
+                                </button>
+                            </div>
+                            {/* Speech Bubbles Overlay */}
+                            {opinions.length > 0 && (
+                                <div className="absolute bottom-full left-0 w-full mb-4 space-y-2 px-4">
+                                    {opinions.slice(-3).map((op, i) => (
+                                        <div key={i} className="bg-black/80 border border-gray-700 p-3 rounded clip-corner-tr animate-in slide-in-from-bottom">
+                                            <div className="flex justify-between text-xs mb-1">
+                                                <span className={`${op.stance === 'support' ? 'text-green-500' : 'text-red-500'} font-bold uppercase`}>[{op.stance}]</span>
+                                                <span className="text-[#FCEE0A]">{AGENT_TYPES[op.agent as keyof typeof AGENT_TYPES].name}</span>
+                                            </div>
+                                            <p className="text-gray-300 text-sm">{op.reasoning}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
-                </div>
+                )}
 
-                {/* Proposal Card */}
+                {/* Proposal Result Card */}
                 {proposal && (
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl p-6 pointer-events-auto">
-                        <ProposalCard
-                            proposal={proposal}
-                            onApprove={handleApprove}
-                            onReject={handleReject}
-                        />
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm pointer-events-auto z-50">
+                        <ProposalCard proposal={proposal} onResolve={() => { setProposal(null); setOpinions([]) }} />
                     </div>
                 )}
             </div>
@@ -235,193 +375,77 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
     )
 }
 
-// Components remain similar but styled... 
 function RoundTable() {
     return (
-        <group>
+        <group position={[0, -0.1, 0]}>
             <mesh position={[0, 0.5, 0]} castShadow receiveShadow>
-                <cylinderGeometry args={[2, 2, 0.2, 32]} />
-                <meshStandardMaterial
-                    color="#1a1a1a"
-                    metalness={0.9}
-                    roughness={0.1}
-                />
+                <cylinderGeometry args={[4, 4, 0.2, 32]} />
+                <meshStandardMaterial color="#111" metalness={0.8} roughness={0.2} />
             </mesh>
-            {/* Glowing edge */}
-            <mesh position={[0, 0.5, 0]}>
-                <torusGeometry args={[2, 0.02, 16, 64]} />
-                <meshBasicMaterial color="#FCEE0A" toneMapped={false} />
+            {/* Glowing Ring */}
+            <mesh position={[0, 0.61, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+                <ringGeometry args={[3.8, 3.9, 64]} />
+                <meshBasicMaterial color={COLORS.neon.cyan} />
             </mesh>
-            <mesh position={[0, 0.1, 0]}>
-                <cylinderGeometry args={[2.2, 2.2, 0.05, 32]} />
-                <meshBasicMaterial color="#FCEE0A" transparent opacity={0.1} />
+            {/* Center Hologram base */}
+            <mesh position={[0, 0.6, 0]}>
+                <cylinderGeometry args={[1, 1.2, 0.1, 16]} />
+                <meshStandardMaterial color="#222" />
             </mesh>
         </group>
     )
 }
 
-function SpeakingIndicator({ position, color }: { position: [number, number, number]; color: string }) {
-    const ref = useRef<THREE.Mesh>(null)
 
-    useFrame((state) => {
-        if (ref.current) {
-            ref.current.scale.setScalar(1 + Math.sin(state.clock.elapsedTime * 10) * 0.1)
-            ref.current.rotation.z += 0.02
-        }
-    })
+function ProposalCard({ proposal, onResolve }: { proposal: any, onResolve: () => void }) {
+    const { actions } = useGame()
 
-    return (
-        <mesh ref={ref} position={[position[0], position[1] + 2.5, position[2]]}>
-            <octahedronGeometry args={[0.3, 0]} />
-            <meshBasicMaterial color={color} wireframe />
-        </mesh>
-    )
-}
-
-function SpeechBubble({ agent, stance, reasoning, isActive }: Opinion & { isActive: boolean }) {
-    const stanceColors = {
-        support: 'border-[#00FF00] text-[#00FF00]',
-        concern: 'border-[#FFD700] text-[#FFD700]',
-        oppose: 'border-[#FF0000] text-[#FF0000]',
-        neutral: 'border-[#888888] text-[#888888]',
-    }[stance]
+    const handleExecute = () => {
+        actions.executeProposal(proposal.id)
+        onResolve()
+    }
 
     return (
-        <div
-            className={`
-        absolute top-24 left-1/2 -translate-x-1/2 max-w-xl
-        bg-black/90 backdrop-blur-md p-0.5 clip-corner-all
-        transition-all duration-300
-        ${isActive ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}
-      `}
-        >
-            <div className={`border ${stanceColors.split(' ')[0]} p-6 clip-corner-all bg-[#050510]`}>
-                <div className="flex justify-between items-center mb-2 border-b border-gray-800 pb-2">
-                    <span className="text-[10px] text-gray-500 font-mono tracking-widest">INCOMING_TRANSMISSION</span>
-                    <span className={`text-xs font-bold uppercase ${stanceColors.split(' ')[1]}`}>
-                        [{stance.toUpperCase()}]
-                    </span>
-                </div>
-                <p className="text-white text-lg font-mono leading-relaxed typewriter-text">
-                    "{reasoning}"
-                </p>
-                <div className="mt-3 text-right">
-                    <span className="bg-[#FCEE0A] text-black text-[10px] px-2 py-0.5 font-bold uppercase tracking-widest">
-                        {AGENT_TYPES[agent as keyof typeof AGENT_TYPES]?.name}
-                    </span>
-                </div>
-            </div>
-        </div>
-    )
-}
-
-function ProposalCard({
-    proposal,
-    onApprove,
-    onReject,
-}: {
-    proposal: Proposal
-    onApprove: () => void
-    onReject: () => void
-}) {
-    return (
-        <div className="cyber-panel clip-corner-all p-1 animate-in zoom-in duration-300">
-            <div className="bg-[#050510] p-6 clip-corner-all">
-                {/* Header */}
-                <div className="flex justify-between items-center mb-6 border-b border-[#FCEE0A]/30 pb-4">
+        <div className="cyber-panel p-1 w-full max-w-2xl clip-corner-all animate-in zoom-in">
+            <div className="bg-[#050510] p-8 clip-corner-all border border-[#FCEE0A]/30">
+                <div className="flex justify-between items-start mb-6">
                     <div>
-                        <h2 className="text-2xl font-black text-white uppercase tracking-widest leading-none">
-                            PROPOSAL_0x8F2
-                        </h2>
-                        <span className="text-[10px] text-[#00F0FF] font-mono">HASH: 7a9...f42c</span>
+                        <div className="text-[#FCEE0A] text-xs font-mono uppercase tracking-widest">FINAL CONSENSUS</div>
+                        <h2 className="text-3xl font-black text-white">{proposal.action}</h2>
                     </div>
-                    <div className="text-xs border border-[#FCEE0A] text-[#FCEE0A] px-2 py-1 uppercase tracking-wider">
-                        AWAITING_AUTH
+                    <div className="bg-[#FCEE0A] text-black px-3 py-1 font-bold text-sm uppercase">
+                        {proposal.consensus}
                     </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className="bg-[#FCEE0A]/5 p-3 border-l-2 border-[#FCEE0A]">
-                        <div className="text-[10px] text-gray-500 font-mono uppercase">Action Protocol</div>
-                        <div className="text-white font-bold tracking-wide">{proposal.action}</div>
+                <div className="grid grid-cols-3 gap-4 mb-6">
+                    <div className="bg-[#111] p-3 border-l-2 border-[#00F0FF]">
+                        <div className="text-gray-500 text-xs uppercase">Input</div>
+                        <div className="text-white font-mono font-bold">{proposal.inputAmount} {proposal.inputToken}</div>
                     </div>
-                    <div className="bg-[#FCEE0A]/5 p-3 border-l-2 border-[#FCEE0A]">
-                        <div className="text-[10px] text-gray-500 font-mono uppercase">Value Transfer</div>
-                        <div className="text-white font-mono">{proposal.amount}</div>
+                    <div className="bg-[#111] p-3 border-l-2 border-[#00FF00]">
+                        <div className="text-gray-500 text-xs uppercase">Expected Output</div>
+                        <div className="text-[#00FF00] font-mono font-bold">{proposal.expectedOutput}</div>
                     </div>
-                    <div className="bg-[#FCEE0A]/5 p-3 border-l-2 border-[#FCEE0A]">
-                        <div className="text-[10px] text-gray-500 font-mono uppercase">Yield Projection</div>
-                        <div className="text-[#00FF00] font-mono">{proposal.expected}</div>
-                    </div>
-                    <div className="bg-[#FCEE0A]/5 p-3 border-l-2 border-[#FCEE0A]">
-                        <div className="text-[10px] text-gray-500 font-mono uppercase">Risk Factor</div>
-                        <div className={`${proposal.risk === 'low' ? 'text-[#00FF00]' : proposal.risk === 'medium' ? 'text-[#FFD700]' : 'text-[#FF0000]'} font-bold uppercase`}>
-                            {proposal.risk.toUpperCase()}
-                        </div>
+                    <div className="bg-[#111] p-3 border-l-2 border-[#FF0000]">
+                        <div className="text-gray-500 text-xs uppercase">Risk</div>
+                        <div className="text-[#FF0000] font-mono font-bold uppercase">{proposal.risk}</div>
                     </div>
                 </div>
 
-                <div className="bg-[#222] border border-gray-700 p-4 mb-6 relative">
-                    <div className="absolute top-0 left-0 bg-[#FCEE0A] text-black text-[9px] px-1 font-bold">ANALYSIS</div>
-                    <p className="text-sm text-gray-300 font-mono leading-relaxed pt-2 opacity-80">
-                        {proposal.reasoning}
-                    </p>
-                </div>
-
-                <div className="flex gap-2 mb-6 font-mono text-xs">
-                    <div className="flex-1 bg-black border border-[#00FF00]/30 p-2 text-center">
-                        <div className="text-[#00FF00] font-bold text-lg">{proposal.votes.support}</div>
-                        <div className="text-gray-500">SUPPORT</div>
-                    </div>
-                    <div className="flex-1 bg-black border border-[#FF0000]/30 p-2 text-center">
-                        <div className="text-[#FF0000] font-bold text-lg">{proposal.votes.oppose}</div>
-                        <div className="text-gray-500">OPPOSE</div>
-                    </div>
-                    <div className="flex-1 bg-black border border-gray-700 p-2 text-center">
-                        <div className="text-gray-400 font-bold text-lg">{proposal.votes.abstain}</div>
-                        <div className="text-gray-600">ABSTAIN</div>
-                    </div>
+                <div className="bg-[#222] p-4 text-gray-300 italic mb-8 border border-gray-700">
+                    "{proposal.reasoning}"
                 </div>
 
                 <div className="flex gap-4">
-                    <button
-                        onClick={onApprove}
-                        className="flex-1 btn-cyber clip-corner-tr hover:bg-[#00FF00] hover:shadow-[0_0_20px_#00FF00]"
-                    >
-                        CONFIRM_EXECUTION
+                    <button onClick={handleExecute} className="flex-1 btn-cyber h-14 text-lg">
+                        AUTHORIZE EXECUTION
                     </button>
-                    <button
-                        onClick={onReject}
-                        className="flex-1 py-4 bg-transparent border border-[#FF0000] text-[#FF0000] font-bold tracking-widest uppercase hover:bg-[#FF0000] hover:text-white transition-all clip-corner-tr"
-                    >
-                        ABORT
+                    <button onClick={onResolve} className="flex-1 btn-cyber-outline h-14 text-lg border-red-500 text-red-500 hover:bg-red-500 hover:text-white">
+                        REJECT
                     </button>
                 </div>
             </div>
         </div>
     )
-}
-
-// Helper functions
-function getAgentPosition(agent: string): [number, number, number] {
-    const positions: Record<string, [number, number, number]> = {
-        alphaHunter: [0, 0.5, -3],
-        riskSentinel: [2.5, 0.5, -1.5],
-        macroOracle: [2.5, 0.5, 1.5],
-        devilsAdvocate: [0, 0.5, 3],
-        councilClerk: [-2.5, 0.5, 1.5],
-        user: [-2.5, 0.5, -1.5],
-    }
-    return positions[agent] || [0, 0, 0]
-}
-
-function getMockReasoning(agent: string, prompt: string): string {
-    const responses: Record<string, string> = {
-        alphaHunter: 'This aligns with yield optimization. I analyze the opportunity and SUPPORT this move.',
-        riskSentinel: 'I see moderate risk here. Slippage could be higher. Proceed with CAUTION.',
-        macroOracle: 'Market sentiment suggests stability. The timing appears favorable. I SUPPORT.',
-        devilsAdvocate: 'Have we considered the gas costs? What if ETH pumps tomorrow? I OPPOSE for now.',
-        councilClerk: 'Based on council input, consensus leans toward approval with risk awareness. Final proposal synthesized.',
-    }
-    return responses[agent] || 'Processing...'
 }

@@ -41,7 +41,7 @@ export default function Scene3D({
                     enableRotate={true}
                     enableZoom={true}
                     minDistance={cameraMode === 'isometric' ? 8 : 5}
-                    maxDistance={cameraMode === 'isometric' ? 25 : 20}
+                    maxDistance={cameraMode === 'isometric' ? 100 : 50}
                     minPolarAngle={Math.PI / 6}
                     maxPolarAngle={Math.PI / 2.2}
                     dampingFactor={0.05}
