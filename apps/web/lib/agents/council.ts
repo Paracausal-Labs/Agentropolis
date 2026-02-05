@@ -222,17 +222,44 @@ async function callExternalAgent(
   }
 }
 
+function isTradeProposal(proposal: TradeProposal | TokenLaunchProposal): proposal is TradeProposal {
+  return proposal.strategyType !== 'token_launch' && 'pair' in proposal
+}
+
 function convertExternalProposal(
   proposal: TradeProposal | TokenLaunchProposal,
   messages: CouncilMessage[]
 ): { deliberation: DeliberationResult; proposal: TradeProposal } {
   const { consensus, voteTally } = calculateConsensus(messages)
   
-  const tradeProposal = proposal as TradeProposal
+  if (!isTradeProposal(proposal)) {
+    console.error('[Council] External agent returned token launch proposal, converting to swap')
+    const fallbackProposal: TradeProposal = {
+      id: `external-${Date.now()}`,
+      agentId: 'external',
+      agentName: 'External Agent',
+      pair: {
+        tokenIn: { symbol: 'USDC', address: TOKENS.USDC },
+        tokenOut: { symbol: 'WETH', address: TOKENS.WETH },
+      },
+      action: 'swap',
+      strategyType: 'swap',
+      amountIn: '10',
+      expectedAmountOut: '0.003',
+      maxSlippage: 50,
+      deadline: Date.now() + 3600000,
+      reasoning: 'Fallback proposal from external agent',
+      confidence: 50,
+      riskLevel: 'medium',
+      deliberation: { messages, consensus, voteTally, rounds: 1 },
+    }
+    return { deliberation: { messages, consensus, voteTally, rounds: 1 }, proposal: fallbackProposal }
+  }
+  
   return {
     deliberation: { messages, consensus, voteTally, rounds: 1 },
     proposal: {
-      ...tradeProposal,
+      ...proposal,
       deliberation: { messages, consensus, voteTally, rounds: 1 },
     },
   }
