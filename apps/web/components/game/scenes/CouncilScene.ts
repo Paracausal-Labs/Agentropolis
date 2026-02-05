@@ -68,6 +68,9 @@ const PRESET_PROMPTS = [
   { label: '🚀 Launch Token', prompt: 'Launch a memecoin for the lobster community' },
 ]
 
+const MAX_DELIBERATION_RETRIES = 3
+const RETRY_DELAY_MS = 2000
+
 export class CouncilScene extends Phaser.Scene {
   private seats: AgentSeat[] = []
   private councilSeats: AgentSeat[] = []
@@ -79,6 +82,7 @@ export class CouncilScene extends Phaser.Scene {
   private isDeliberating = false
   private loadingText: Phaser.GameObjects.Text | null = null
   private promptSelector: Phaser.GameObjects.Container | null = null
+  private deliberationRetries = 0
 
   constructor() {
     super({ key: 'CouncilScene' })
@@ -148,12 +152,20 @@ export class CouncilScene extends Phaser.Scene {
       { role: 'clerk', name: 'Council Clerk' },
     ]
 
+    const deployedAgentNames = this.seats.map(s => s.name).filter(Boolean)
+    const getAgentLabel = (index: number, defaultName: string): string => {
+      if (deployedAgentNames.length > index) {
+        return deployedAgentNames[index]
+      }
+      return defaultName
+    }
+
     const seatPositions = [
       { angle: -90, distance: 220, label: 'YOU', role: 'user' },
-      { angle: -45, distance: 200, label: councilAgents[0].name, role: councilAgents[0].role },
-      { angle: 0, distance: 190, label: councilAgents[1].name, role: councilAgents[1].role },
-      { angle: 45, distance: 200, label: councilAgents[2].name, role: councilAgents[2].role },
-      { angle: 90, distance: 220, label: councilAgents[3].name, role: councilAgents[3].role },
+      { angle: -45, distance: 200, label: getAgentLabel(0, councilAgents[0].name), role: councilAgents[0].role },
+      { angle: 0, distance: 190, label: getAgentLabel(1, councilAgents[1].name), role: councilAgents[1].role },
+      { angle: 45, distance: 200, label: getAgentLabel(2, councilAgents[2].name), role: councilAgents[2].role },
+      { angle: 90, distance: 220, label: getAgentLabel(3, councilAgents[3].name), role: councilAgents[3].role },
       { angle: 180, distance: 190, label: councilAgents[4].name, role: councilAgents[4].role },
     ]
 
@@ -165,7 +177,8 @@ export class CouncilScene extends Phaser.Scene {
       const y = tableY + Math.sin(radians) * (pos.distance * 0.45)
 
       const isUser = i === 0
-      const emoji = isUser ? '👤' : AGENT_EMOJIS[pos.role] || '🤖'
+      const isDeployed = !isUser && deployedAgentNames.length > (i - 1) && i <= 5
+      const emoji = isUser ? '👤' : isDeployed ? '🤖' : AGENT_EMOJIS[pos.role] || '🤖'
       const seat = this.createSeatSprite(x, y, isUser, pos.label, emoji)
 
       if (!isUser) {
@@ -516,20 +529,33 @@ export class CouncilScene extends Phaser.Scene {
     })
 
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      
+      const guestSessionId = typeof localStorage !== 'undefined' ? localStorage.getItem('guestSessionId') : null
+      if (guestSessionId) {
+        headers['X-Guest-Session'] = guestSessionId
+      }
+
+      const agentEndpoint = typeof localStorage !== 'undefined' ? localStorage.getItem('agentEndpoint') : null
+
       const res = await fetch('/api/agents/council', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           userPrompt: prompt,
           context: { balance: '0.1 ETH', riskLevel: 'medium' },
+          deployedAgents: this.seats.map(s => ({ id: s.id, name: s.name })),
+          ...(agentEndpoint && { agentEndpoint }),
         }),
       })
 
       const data = await res.json()
 
       if (!data.success || !data.deliberation) {
-        throw new Error('Invalid council response')
+        throw new Error(data.error || data.message || 'Invalid council response')
       }
+
+      this.deliberationRetries = 0
 
       if (this.loadingText) {
         this.loadingText.destroy()
@@ -556,13 +582,30 @@ export class CouncilScene extends Phaser.Scene {
       this.displayProposal(data.proposal)
     } catch (err) {
       console.error('[CouncilScene] Deliberation failed:', err)
+      
+      this.deliberationRetries++
+      
       if (this.loadingText) {
-        this.loadingText.setText('❌ Deliberation failed. Retrying...')
-        this.time.delayedCall(2000, () => {
-          this.isDeliberating = false
-          this.runDeliberation(prompt)
-        })
+        if (this.deliberationRetries < MAX_DELIBERATION_RETRIES) {
+          this.loadingText.setText(`❌ Deliberation failed. Retrying (${this.deliberationRetries}/${MAX_DELIBERATION_RETRIES})...`)
+          this.time.delayedCall(RETRY_DELAY_MS, () => {
+            this.isDeliberating = false
+            this.runDeliberation(prompt)
+          })
+        } else {
+          this.loadingText.setText('❌ Deliberation failed after multiple attempts.')
+          this.time.delayedCall(3000, () => {
+            if (this.loadingText) {
+              this.loadingText.destroy()
+              this.loadingText = null
+            }
+            this.deliberationRetries = 0
+            this.isDeliberating = false
+            this.showPromptSelector()
+          })
+        }
       }
+      return
     }
 
     this.isDeliberating = false
@@ -627,6 +670,7 @@ export class CouncilScene extends Phaser.Scene {
       this.proposalCard.list.pop()
     }
 
+    this.proposalCard.setVisible(true)
     this.proposalCard.setAlpha(0)
     this.proposalCard.setScale(0.9)
     
