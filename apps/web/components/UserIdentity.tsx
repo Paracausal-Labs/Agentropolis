@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAccount, useEnsName, useEnsAvatar, useWalletClient } from 'wagmi'
 import { sepolia } from 'viem/chains'
 import { writeAgentConfig, getDefaultAgentConfig } from '@/lib/ens/textRecords'
@@ -10,6 +10,12 @@ export function UserIdentity() {
   const { data: walletClient } = useWalletClient()
   const [isSaving, setIsSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle')
+  const [mounted, setMounted] = useState(false)
+  
+  // Prevent hydration mismatch by only rendering after mount
+  useEffect(() => {
+    setMounted(true)
+  }, [])
   
   const { data: ensName } = useEnsName({
     address,
@@ -48,7 +54,8 @@ export function UserIdentity() {
     }
   }
 
-  if (!isConnected || !address) {
+  // Return null consistently on both server and client until mounted
+  if (!mounted || !isConnected || !address) {
     return null
   }
 

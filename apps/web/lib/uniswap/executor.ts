@@ -13,6 +13,7 @@ import {
 import { baseSepolia } from 'viem/chains'
 import type { TradeProposal } from '@agentropolis/shared/src/types'
 import { CONTRACTS, POOL_KEY, RPC_URL, TOKEN_DECIMALS } from './constants'
+import { getPoolInfo, type PoolKey, findInitializedPool } from './pools'
 
 const UNIVERSAL_ROUTER_ABI = [
   {
@@ -217,6 +218,36 @@ export const executeSwap = async (
     chain: walletClient.chain ?? baseSepolia,
     transport: http(RPC_URL),
   })
+
+  const poolInfo = await getPoolInfo(POOL_KEY as PoolKey)
+  console.log('[uniswap] Pool info:', {
+    poolId: poolInfo.poolId,
+    isInitialized: poolInfo.isInitialized,
+    liquidity: poolInfo.liquidity.toString(),
+    tick: poolInfo.tick,
+  })
+
+  if (!poolInfo.isInitialized) {
+    const alternativePool = await findInitializedPool(
+      proposal.pair.tokenIn.address as Address,
+      proposal.pair.tokenOut.address as Address
+    )
+    
+    if (!alternativePool) {
+      console.error('[uniswap] No initialized pool found for USDC/WETH on Base Sepolia')
+      throw new Error('No initialized pool found. The USDC/WETH pool may not exist on Base Sepolia testnet.')
+    }
+    
+    console.log('[uniswap] Found alternative pool:', {
+      fee: alternativePool.fee,
+      tickSpacing: alternativePool.tickSpacing,
+      liquidity: alternativePool.liquidity.toString(),
+    })
+  }
+
+  if (poolInfo.liquidity === 0n) {
+    console.warn('[uniswap] Pool has zero liquidity - swap will likely fail')
+  }
 
   const amountIn = parseAmount(
     proposal.amountIn,
