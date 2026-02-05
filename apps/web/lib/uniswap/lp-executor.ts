@@ -79,12 +79,26 @@ const toRandomHex = (): `0x${string}` => {
     .join('')}`
 }
 
+const BASE_SEPOLIA_CHAIN_ID = 84532
+
 const getTokenDecimals = (address: string) => TOKEN_DECIMALS[address.toLowerCase()] ?? 18
 
-const parseAmount = (value: string, decimals: number) => {
+const sanitizeNumericString = (value: string): string => {
+  if (!value) return '0'
+  const cleaned = value
+    .replace(/[,_]/g, '')
+    .replace(/\s*(ETH|WETH|USDC|USD|wei|gwei)\s*/gi, '')
+    .replace(/[~≈]/g, '')
+    .trim()
+  const match = cleaned.match(/^-?\d+\.?\d*/)
+  return match ? match[0] : '0'
+}
+
+const parseAmount = (value: string | number, decimals: number) => {
   if (!value) return 0n
+  const sanitized = sanitizeNumericString(String(value))
   try {
-    return parseUnits(value, decimals)
+    return parseUnits(sanitized, decimals)
   } catch {
     return 0n
   }
@@ -169,7 +183,7 @@ export const addLiquidity = async (
   proposal: TradeProposal,
   walletClient?: WalletClient
 ): Promise<{ txHash: string; positionId?: string }> => {
-  if (mockEnabled || !walletClient) {
+  if (mockEnabled) {
     console.info('[lp-executor][mock] addLiquidity', {
       proposalId: proposal.id,
       strategyType: proposal.strategyType,
@@ -179,8 +193,12 @@ export const addLiquidity = async (
     return { txHash: toRandomHex(), positionId: `mock-${Date.now()}` }
   }
 
-  if (!walletClient.account?.address) {
-    throw new Error('Wallet not connected')
+  if (!walletClient?.account?.address) {
+    throw new Error('Wallet not connected. Please connect your wallet to add liquidity.')
+  }
+
+  if (walletClient.chain?.id !== BASE_SEPOLIA_CHAIN_ID) {
+    throw new Error(`Wrong network. Please switch to Base Sepolia (chainId: ${BASE_SEPOLIA_CHAIN_ID})`)
   }
 
   const account = walletClient.account.address

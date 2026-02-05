@@ -80,13 +80,25 @@ const toRandomHex = () => {
 const getTokenDecimals = (address: string) =>
   TOKEN_DECIMALS[address.toLowerCase()] ?? 18
 
-const parseAmount = (value: string, decimals: number) => {
+const sanitizeNumericString = (value: string): string => {
+  if (!value) return '0'
+  const cleaned = value
+    .replace(/[,_]/g, '')
+    .replace(/\s*(ETH|WETH|USDC|USD|wei|gwei)\s*/gi, '')
+    .replace(/[~≈]/g, '')
+    .trim()
+  const match = cleaned.match(/^-?\d+\.?\d*/)
+  return match ? match[0] : '0'
+}
+
+const parseAmount = (value: string | number, decimals: number) => {
   if (!value) return 0n
+  const sanitized = sanitizeNumericString(String(value))
   try {
-    return parseUnits(value, decimals)
+    return parseUnits(sanitized, decimals)
   } catch {
     try {
-      return BigInt(value)
+      return BigInt(sanitized)
     } catch {
       return 0n
     }
@@ -190,11 +202,13 @@ const assertSupportedPair = (proposal: TradeProposal) => {
   }
 }
 
+const BASE_SEPOLIA_CHAIN_ID = 84532
+
 export const executeSwap = async (
   proposal: TradeProposal,
   walletClient?: WalletClient
 ): Promise<{ txHash: string }> => {
-  if (mockEnabled || !walletClient) {
+  if (mockEnabled) {
     console.info('[uniswap][mock] swap', {
       proposalId: proposal.id,
       pair: proposal.pair,
@@ -203,12 +217,15 @@ export const executeSwap = async (
       maxSlippage: proposal.maxSlippage,
       deadline: proposal.deadline,
     })
-
     return { txHash: toRandomHex() }
   }
 
-  if (!walletClient.account?.address) {
-    return { txHash: toRandomHex() }
+  if (!walletClient?.account?.address) {
+    throw new Error('Wallet not connected. Please connect your wallet to execute swaps.')
+  }
+
+  if (walletClient.chain?.id !== BASE_SEPOLIA_CHAIN_ID) {
+    throw new Error(`Wrong network. Please switch to Base Sepolia (chainId: ${BASE_SEPOLIA_CHAIN_ID})`)
   }
 
   assertSupportedPair(proposal)
