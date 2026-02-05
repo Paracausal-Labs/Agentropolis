@@ -223,18 +223,23 @@ function createRealChannelManager(
 ): ChannelManager {
   let state: ChannelState = { ...initialState }
   let client: NitroliteClient | null = null
+  let clientPromise: Promise<NitroliteClient | null> | null = null
   let ws: WebSocket | null = null
 
   function setState(updates: Partial<ChannelState>) {
     state = { ...state, ...updates }
   }
 
-  function ensureClient(): NitroliteClient {
+  async function ensureClient(): Promise<NitroliteClient> {
+    if (client) return client
+    
+    if (!clientPromise) {
+      clientPromise = createNitroliteClient(publicClient, walletClient)
+    }
+    
+    client = await clientPromise
     if (!client) {
-      client = createNitroliteClient(publicClient, walletClient)
-      if (!client) {
-        throw new Error('Failed to create Nitrolite client')
-      }
+      throw new Error('Failed to create Nitrolite client')
     }
     return client
   }
@@ -244,20 +249,21 @@ function createRealChannelManager(
 
     async deposit(amount = YELLOW_DEFAULTS.DEPOSIT_AMOUNT) {
       try {
-        const nitrolite = ensureClient()
+        const nitrolite = await ensureClient()
 
         console.log('[Yellow] Depositing:', formatYtestUsd(amount), 'ytest.USD')
 
         setState({ status: 'approving', error: undefined })
         
-        await nitrolite.approveTokens(YELLOW_CONTRACTS.YTEST_USD, amount)
-        console.log('[Yellow] Token approval complete')
+        const allowance = await nitrolite.getTokenAllowance(YELLOW_CONTRACTS.YTEST_USD)
+        if (allowance < amount) {
+          await nitrolite.approveTokens(YELLOW_CONTRACTS.YTEST_USD, amount)
+          console.log('[Yellow] Token approval complete')
+        }
 
         setState({ status: 'depositing' })
         
-        const depositResult = await nitrolite.deposit(YELLOW_CONTRACTS.YTEST_USD, amount) as unknown as string | { hash: string } | null
-        const txHash = typeof depositResult === 'string' ? depositResult : (depositResult as { hash?: string } | null)?.hash ?? null
-        
+        const txHash = await nitrolite.deposit(YELLOW_CONTRACTS.YTEST_USD, amount)
         console.log('[Yellow] Deposit complete:', txHash)
 
         setState({
@@ -281,8 +287,6 @@ function createRealChannelManager(
         throw new Error('Must deposit before creating channel')
       }
 
-      const nitrolite = ensureClient()
-
       try {
         setState({ status: 'connecting', error: undefined })
         
@@ -291,18 +295,35 @@ function createRealChannelManager(
 
         setState({ status: 'creating' })
 
-        const address = walletClient.account.address
-        const channelParams = {
-          participants: [address],
-          adjudicator: YELLOW_CONTRACTS.CUSTODY,
-          challenge: BigInt(86400),
-          nonce: BigInt(Date.now()),
-        }
-        const channelResult = await (nitrolite.createChannel as unknown as (params: typeof channelParams) => Promise<unknown>)(channelParams)
+        const channelId = await new Promise<string>((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('Channel creation timeout')), 30000)
+          
+          ws!.onmessage = (event) => {
+            clearTimeout(timeout)
+            try {
+              const response = JSON.parse(event.data)
+              if (response.error) {
+                reject(new Error(response.error.message || 'Channel creation failed'))
+                return
+              }
+              const id = response.result?.channel_id || response.channel_id || `channel-${Date.now()}`
+              resolve(id)
+            } catch (e) {
+              reject(e)
+            }
+          }
 
-        const channelId = typeof channelResult === 'string' 
-          ? channelResult 
-          : (channelResult as { channelId?: string } | null)?.channelId ?? `channel-${Date.now()}`
+          const request = {
+            jsonrpc: '2.0',
+            id: Date.now(),
+            method: 'create_channel',
+            params: {
+              chain_id: 84532,
+              token: YELLOW_CONTRACTS.YTEST_USD,
+            }
+          }
+          ws!.send(JSON.stringify(request))
+        })
 
         console.log('[Yellow] Channel created:', channelId)
 
@@ -340,26 +361,36 @@ function createRealChannelManager(
       }
 
       try {
-        const nitrolite = ensureClient()
+        const nitrolite = await ensureClient()
         
         console.log(`[Yellow] Off-chain transfer: ${formatYtestUsd(amount)} ytest.USD to ${destination}`)
 
-        const transferResult = await (nitrolite as unknown as { 
+        const clientWithTransfer = nitrolite as unknown as { 
           transfer?: (params: { to: string; amount: bigint; token: string }) => Promise<{ txId?: string }> 
-        }).transfer?.({
+        }
+        
+        if (!clientWithTransfer.transfer) {
+          console.error('[Yellow] Transfer method not available on client')
+          return { success: false, newBalance: state.balance, error: 'Transfer method not available' }
+        }
+
+        const transferResult = await clientWithTransfer.transfer({
           to: destination,
           amount,
           token: YELLOW_CONTRACTS.YTEST_USD,
         })
 
-        const txId = transferResult?.txId ?? `tx-${Date.now()}`
+        if (!transferResult || !transferResult.txId) {
+          console.error('[Yellow] Transfer returned invalid response')
+          return { success: false, newBalance: state.balance, error: 'Transfer returned invalid response' }
+        }
+
         const newBalance = state.balance - amount
-        
         setState({ balance: newBalance })
         
-        console.log(`[Yellow] Transfer complete: txId=${txId}, newBalance=${formatYtestUsd(newBalance)}`)
+        console.log(`[Yellow] Transfer complete: txId=${transferResult.txId}, newBalance=${formatYtestUsd(newBalance)}`)
         
-        return { success: true, newBalance, txId }
+        return { success: true, newBalance, txId: transferResult.txId }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Transfer failed'
         console.error('[Yellow] Transfer error:', errorMessage)
@@ -373,27 +404,47 @@ function createRealChannelManager(
       }
 
       try {
-        const nitrolite = ensureClient()
-        
         setState({ status: 'closing', error: undefined })
 
         console.log('[Yellow] Initiating close handshake for channel:', state.channelId)
 
-        if (ws) {
-          ws.close()
-          ws = null
-        }
-
         let settlementTxHash: string | undefined
 
-        if (state.channelId) {
-          const closeResult = await (nitrolite.closeChannel as unknown as (channelId: string) => Promise<{ txHash?: string } | string | null>)?.(state.channelId)
-          
-          if (typeof closeResult === 'string') {
-            settlementTxHash = closeResult
-          } else if (closeResult && typeof closeResult === 'object') {
-            settlementTxHash = closeResult.txHash
-          }
+        if (state.channelId && ws) {
+          const closePromise = new Promise<string | undefined>((resolve) => {
+            const timeout = setTimeout(() => {
+              console.warn('[Yellow] Close channel RPC timeout')
+              resolve(undefined)
+            }, 10000)
+            
+            ws!.onmessage = (event) => {
+              clearTimeout(timeout)
+              try {
+                const response = JSON.parse(event.data)
+                resolve(response.result?.tx_hash || response.tx_hash)
+              } catch {
+                resolve(undefined)
+              }
+            }
+
+            const request = {
+              jsonrpc: '2.0',
+              id: Date.now(),
+              method: 'close_channel',
+              params: { channel_id: state.channelId }
+            }
+            console.log('[Yellow] Sending close_channel RPC')
+            ws!.send(JSON.stringify(request))
+          })
+
+          settlementTxHash = await closePromise
+          console.log('[Yellow] Close RPC complete, txHash:', settlementTxHash)
+        }
+
+        if (ws) {
+          console.log('[Yellow] Closing WebSocket connection')
+          ws.close()
+          ws = null
         }
 
         const finalBalance = state.balance
@@ -409,6 +460,12 @@ function createRealChannelManager(
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Channel close failed'
         console.error('[Yellow] Close error:', errorMessage)
+        
+        if (ws) {
+          ws.close()
+          ws = null
+        }
+        
         setState({ status: 'error', error: errorMessage })
         return { success: false, finalBalance: state.balance, error: errorMessage }
       }
@@ -430,21 +487,11 @@ function createRealChannelManager(
       }
 
       try {
-        const nitrolite = ensureClient()
+        const nitrolite = await ensureClient()
         
         console.log(`[Yellow] Withdrawing ${formatYtestUsd(withdrawAmount)} from custody...`)
 
-        const withdrawResult = await (nitrolite.withdrawal as unknown as (token: string, amount: bigint) => Promise<{ hash?: string } | string | null>)?.(
-          YELLOW_CONTRACTS.YTEST_USD,
-          withdrawAmount
-        )
-
-        let txHash: string | undefined
-        if (typeof withdrawResult === 'string') {
-          txHash = withdrawResult
-        } else if (withdrawResult && typeof withdrawResult === 'object') {
-          txHash = withdrawResult.hash
-        }
+        const txHash = await nitrolite.withdrawal(YELLOW_CONTRACTS.YTEST_USD, withdrawAmount)
 
         const newBalance = state.balance - withdrawAmount
         setState({ balance: newBalance, depositAmount: newBalance })
@@ -489,20 +536,24 @@ export async function depositToYellow(
     return `0x${Date.now().toString(16).padStart(64, '0')}`
   }
 
-  const client = createNitroliteClient(publicClient, walletClient)
+  const client = await createNitroliteClient(publicClient, walletClient)
   if (!client) {
     throw new Error('Failed to create Nitrolite client')
   }
 
-  await client.approveTokens(YELLOW_CONTRACTS.YTEST_USD, amount)
-  const result = await client.deposit(YELLOW_CONTRACTS.YTEST_USD, amount) as unknown as string | { hash: string } | null
+  const allowance = await client.getTokenAllowance(YELLOW_CONTRACTS.YTEST_USD)
+  if (allowance < amount) {
+    await client.approveTokens(YELLOW_CONTRACTS.YTEST_USD, amount)
+  }
   
-  return typeof result === 'string' ? result : (result as { hash?: string } | null)?.hash ?? null
+  const txHash = await client.deposit(YELLOW_CONTRACTS.YTEST_USD, amount)
+  return txHash
 }
 
-export async function createChannel(
-  publicClient: PublicClient,
-  walletClient: WalletClient<Transport, Chain, Account>
+export async function createYellowChannel(
+  _publicClient: PublicClient,
+  _walletClient: WalletClient<Transport, Chain, Account>,
+  _depositAmount: bigint
 ): Promise<string | null> {
   if (isMockMode()) {
     console.log('[Yellow Mock] createChannel')
@@ -510,23 +561,40 @@ export async function createChannel(
     return `channel-${Date.now()}`
   }
 
-  const client = createNitroliteClient(publicClient, walletClient)
-  if (!client) {
-    throw new Error('Failed to create Nitrolite client')
-  }
+  const ws = await connectToClearnode()
 
-  await connectToClearnode()
-  const address = walletClient.account.address
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      ws.close()
+      reject(new Error('Channel creation timeout'))
+    }, 30000)
 
-  const channelParams = {
-    participants: [address],
-    adjudicator: YELLOW_CONTRACTS.CUSTODY,
-    challenge: BigInt(86400),
-    nonce: BigInt(Date.now()),
-  }
-  const result = await (client.createChannel as unknown as (params: typeof channelParams) => Promise<unknown>)(channelParams)
+    ws.onmessage = (event) => {
+      clearTimeout(timeout)
+      ws.close()
+      try {
+        const response = JSON.parse(event.data)
+        if (response.error) {
+          reject(new Error(response.error.message || 'Channel creation failed'))
+          return
+        }
+        resolve(response.result?.channel_id || response.channel_id || `channel-${Date.now()}`)
+      } catch (e) {
+        reject(e)
+      }
+    }
 
-  return typeof result === 'string' ? result : (result as { channelId?: string } | null)?.channelId ?? null
+    const request = {
+      jsonrpc: '2.0',
+      id: Date.now(),
+      method: 'create_channel',
+      params: {
+        chain_id: 84532,
+        token: YELLOW_CONTRACTS.YTEST_USD,
+      }
+    }
+    ws.send(JSON.stringify(request))
+  })
 }
 
 interface YellowChannelContextValue {
