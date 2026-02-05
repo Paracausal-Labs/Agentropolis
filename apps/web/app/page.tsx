@@ -102,6 +102,13 @@ export default function Home() {
           >
             GUEST ACCESS
           </button>
+
+          <a
+            href="/docs"
+            className="btn-cyber-outline w-64 h-16 text-xl clip-corner-tr flex items-center justify-center hover:bg-[#FCEE0A] hover:text-black transition-colors"
+          >
+            DOCS
+          </a>
         </div>
 
         {/* Footer Stats */}

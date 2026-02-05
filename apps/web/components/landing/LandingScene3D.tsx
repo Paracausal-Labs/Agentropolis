@@ -1,62 +1,86 @@
 'use client'
 
-import { Canvas } from '@react-three/fiber'
-import { OrbitControls, Stars } from '@react-three/drei'
+import { Canvas, useFrame } from '@react-three/fiber'
+import { OrbitControls, Stars, Sparkles, Grid, Icosahedron, Float } from '@react-three/drei'
 import { useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 
-// Floating 3D Buildings for background
-function FloatingBuilding({ position }: { position: [number, number, number] }) {
+function CyberCore() {
     const meshRef = useRef<THREE.Mesh>(null)
 
     useFrame((state) => {
         if (meshRef.current) {
-            meshRef.current.rotation.y += 0.001
-            meshRef.current.position.y = position[1] + Math.sin(state.clock.elapsedTime * 0.5) * 0.3
+            meshRef.current.rotation.x = state.clock.elapsedTime * 0.2
+            meshRef.current.rotation.y = state.clock.elapsedTime * 0.3
         }
     })
 
     return (
-        <mesh ref={meshRef} position={position} castShadow>
-            <boxGeometry args={[1, 2, 1]} />
-            <meshStandardMaterial color="#2d2319" emissive="#FFAA00" emissiveIntensity={0.1} />
-            {/* Gold edges */}
-            <lineSegments>
-                <edgesGeometry args={[new THREE.BoxGeometry(1, 2, 1)]} />
-                <lineBasicMaterial color="#FFAA00" transparent opacity={0.3} />
-            </lineSegments>
-        </mesh>
+        <Float speed={2} rotationIntensity={0.5} floatIntensity={0.5}>
+            <group>
+                <Icosahedron args={[1, 0]} ref={meshRef}>
+                    <meshStandardMaterial
+                        color="#050510"
+                        emissive="#00F0FF"
+                        emissiveIntensity={2}
+                        wireframe
+                    />
+                </Icosahedron>
+                <Icosahedron args={[0.8, 0]}>
+                    <meshBasicMaterial color="#FCEE0A" wireframe transparent opacity={0.2} />
+                </Icosahedron>
+            </group>
+        </Float>
     )
 }
 
 export default function LandingScene3D() {
     return (
         <div className="w-full h-full">
-            <Canvas camera={{ position: [0, 0, 15], fov: 60 }}>
-                {/* Lighting */}
-                <ambientLight intensity={0.3} />
-                <pointLight position={[10, 10, 10]} intensity={1} color="#FFAA00" />
-                <pointLight position={[-10, -10, -10]} intensity={0.5} color="#FF7F00" />
+            <Canvas camera={{ position: [0, 4, 8], fov: 60 }}>
+                <color attach="background" args={['#050510']} />
 
-                {/* Stars background */}
-                <Stars radius={100} depth={50} count={2000} factor={4} saturation={0} fade speed={0.5} />
+                {/* Atmosphere */}
+                <fog attach="fog" args={['#050510', 5, 25]} />
+                <ambientLight intensity={2} />
 
-                {/* Floating buildings */}
-                <FloatingBuilding position={[-4, 0, -5]} />
-                <FloatingBuilding position={[3, 1, -6]} />
-                <FloatingBuilding position={[-2, -1, -8]} />
-                <FloatingBuilding position={[5, 0.5, -7]} />
-                <FloatingBuilding position={[0, -0.5, -10]} />
+                {/* Cyber Core Hero */}
+                <CyberCore />
 
-                {/* Auto-rotate camera */}
+                {/* Infinite Grid */}
+                <Grid
+                    position={[0, -2, 0]}
+                    args={[10.5, 10.5]}
+                    cellSize={0.6}
+                    cellThickness={1}
+                    cellColor="#00F0FF"
+                    sectionSize={3.3}
+                    sectionThickness={1.5}
+                    sectionColor="#FCEE0A"
+                    fadeDistance={20}
+                    fadeStrength={1.5}
+                    infiniteGrid
+                />
+
+                {/* Cyber Particles */}
+                <Stars radius={50} depth={50} count={3000} factor={4} saturation={1} fade speed={1} />
+                <Sparkles
+                    count={300}
+                    scale={12}
+                    size={2}
+                    speed={0.4}
+                    opacity={0.6}
+                    color="#00F0FF"
+                />
+
+                {/* Camera Controls */}
                 <OrbitControls
                     enableZoom={false}
                     enablePan={false}
                     autoRotate
                     autoRotateSpeed={0.5}
+                    maxPolarAngle={Math.PI / 2 - 0.05}
                     minPolarAngle={Math.PI / 3}
-                    maxPolarAngle={Math.PI / 2}
                 />
             </Canvas>
         </div>
