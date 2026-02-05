@@ -88,12 +88,85 @@ export interface CouncilRequest {
   agentEndpoint?: string
 }
 
+// SSRF Protection: Allowed external API domains
+const ALLOWED_API_DOMAINS = [
+  'localhost',
+  '127.0.0.1',
+  'api.openai.com',
+  'api.groq.com',
+  'api.anthropic.com',
+  'generativelanguage.googleapis.com',
+]
+
+// SSRF Protection: Private IP ranges to block
+const PRIVATE_IP_PATTERNS = [
+  /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/,          // 10.0.0.0/8
+  /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/, // 172.16.0.0/12
+  /^192\.168\.\d{1,3}\.\d{1,3}$/,             // 192.168.0.0/16
+  /^169\.254\.\d{1,3}\.\d{1,3}$/,             // 169.254.0.0/16 (link-local)
+  /^0\.0\.0\.0$/,                              // 0.0.0.0
+]
+
+const EXTERNAL_AGENT_TIMEOUT_MS = 10_000 // 10 seconds
+const MAX_RESPONSE_SIZE_BYTES = 1024 * 1024 // 1MB
+
+function validateExternalEndpoint(endpoint: string): { valid: boolean; error?: string } {
+  let url: URL
+  try {
+    url = new URL(endpoint)
+  } catch {
+    return { valid: false, error: 'Invalid URL format' }
+  }
+
+  const hostname = url.hostname.toLowerCase()
+  
+  // Check if hostname is a private IP
+  for (const pattern of PRIVATE_IP_PATTERNS) {
+    if (pattern.test(hostname)) {
+      return { valid: false, error: 'Private IP addresses are not allowed' }
+    }
+  }
+
+  // Allow localhost without HTTPS requirement
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return { valid: true }
+  }
+
+  // For external hosts, require HTTPS
+  if (url.protocol !== 'https:') {
+    return { valid: false, error: 'HTTPS required for external endpoints' }
+  }
+
+  // Check allowlist
+  const isAllowed = ALLOWED_API_DOMAINS.some(domain => 
+    hostname === domain || hostname.endsWith('.' + domain)
+  )
+  
+  if (!isAllowed) {
+    return { valid: false, error: `Domain not in allowlist: ${hostname}` }
+  }
+
+  return { valid: true }
+}
+
 async function callExternalAgent(
   endpoint: string,
   request: ExternalAgentRequest,
   x402Fetch?: typeof fetch
 ): Promise<ExternalAgentResponse> {
+  // Validate endpoint before making request (SSRF protection)
+  const validation = validateExternalEndpoint(endpoint)
+  if (!validation.valid) {
+    console.error('[Council] SSRF blocked:', validation.error)
+    return { 
+      success: false, 
+      error: `Endpoint blocked: ${validation.error}` 
+    }
+  }
+
   const fetcher = x402Fetch || fetch
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), EXTERNAL_AGENT_TIMEOUT_MS)
   
   try {
     console.log('[Council] Calling external agent:', endpoint)
@@ -102,13 +175,28 @@ async function callExternalAgent(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
+      signal: controller.signal,
     })
+
+    clearTimeout(timeoutId)
 
     if (!response.ok) {
       throw new Error(`External agent error: ${response.status}`)
     }
 
-    const data = await response.json()
+    // Check Content-Length header if available
+    const contentLength = response.headers.get('Content-Length')
+    if (contentLength && parseInt(contentLength, 10) > MAX_RESPONSE_SIZE_BYTES) {
+      throw new Error(`Response too large: ${contentLength} bytes (max ${MAX_RESPONSE_SIZE_BYTES})`)
+    }
+
+    // Read response with size limit
+    const text = await response.text()
+    if (text.length > MAX_RESPONSE_SIZE_BYTES) {
+      throw new Error(`Response too large: ${text.length} bytes (max ${MAX_RESPONSE_SIZE_BYTES})`)
+    }
+
+    const data = JSON.parse(text)
     console.log('[Council] External agent response received')
     
     const paymentTx = response.headers.get('X-Payment-Response')
@@ -119,6 +207,13 @@ async function callExternalAgent(
 
     return data as ExternalAgentResponse
   } catch (error) {
+    clearTimeout(timeoutId)
+    
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('[Council] External agent timeout after', EXTERNAL_AGENT_TIMEOUT_MS, 'ms')
+      return { success: false, error: 'Request timeout' }
+    }
+    
     console.error('[Council] External agent failed:', error)
     return { 
       success: false, 
