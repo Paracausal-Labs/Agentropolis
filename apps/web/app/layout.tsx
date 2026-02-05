@@ -1,11 +1,16 @@
-import type { Metadata } from 'next'
+import { Rajdhani } from 'next/font/google'
 import './globals.css'
-import { WalletProvider } from '@/components/WalletProvider'
-import { ErrorToastProvider } from '@/components/ErrorToast'
+import { Providers } from './providers'
 
-export const metadata: Metadata = {
-  title: 'Agentropolis',
-  description: 'Build a city of agents, approve their plans, execute trades on-chain.',
+const rajdhani = Rajdhani({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700'],
+  variable: '--font-rajdhani',
+})
+
+export const metadata = {
+  title: 'AGENTROPOLIS | 2026',
+  description: 'Cyberpunk DeFi City Builder',
 }
 
 export default function RootLayout({
@@ -15,12 +20,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>
-        <WalletProvider>
-          <ErrorToastProvider>
-            {children}
-          </ErrorToastProvider>
-        </WalletProvider>
+      <body className={`${rajdhani.variable} font-sans`}>
+        <Providers>{children}</Providers>
       </body>
     </html>
   )

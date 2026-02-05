@@ -1,172 +1,139 @@
 'use client'
 
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
+
+// Dynamically import 3D scene
+const LandingScene3D = dynamic(() => import('@/components/landing/LandingScene3D'), { ssr: false })
 
 export default function Home() {
   const router = useRouter()
-  const [mounted, setMounted] = useState(false)
+  const [isTransitioning, setIsTransitioning] = useState(false)
+  const [glitchText, setGlitchText] = useState('AGENTROPOLIS')
 
+  // Glitch effect on title
   useEffect(() => {
-    setMounted(true)
+    const interval = setInterval(() => {
+      if (Math.random() > 0.95) {
+        // Random glitch characters
+        const glitched = 'AGENTROPOLIS'.split('').map((char, index) => {
+          if (Math.random() > 0.7) return String.fromCharCode(65 + Math.floor(Math.random() * 26));
+          return char;
+        }).join('');
+        setGlitchText(glitched)
+        setTimeout(() => setGlitchText('AGENTROPOLIS'), 100)
+      }
+    }, 2000)
+    return () => clearInterval(interval)
   }, [])
 
-  const handleTryAsGuest = () => {
-    router.push('/app?guest=true')
+  const handleLaunch = () => {
+    setIsTransitioning(true)
+    setTimeout(() => {
+      router.push('/app')
+    }, 1200)
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-[#0a0a1a] via-[#0f172a] to-[#1a0a2a] text-white overflow-hidden">
-      {/* Animated background grid */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e1e3f_1px,transparent_1px),linear-gradient(to_bottom,#1e1e3f_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-20" />
-
-      {/* Animated particles */}
-      <div className="absolute inset-0">
-        {mounted && [...Array(20)].map((_, i) => (
-          <div
-            key={i}
-            className="absolute w-1 h-1 rounded-full bg-cyan-400 animate-pulse"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 3}s`,
-              animationDuration: `${2 + Math.random() * 3}s`,
-            }}
-          />
-        ))}
+    <main className="min-h-screen bg-[#050510] relative overflow-hidden font-[Rajdhani]">
+      {/* 3D Background */}
+      <div className="absolute inset-0 opacity-40">
+        <LandingScene3D />
       </div>
 
-      <div className="relative flex flex-col items-center justify-center min-h-screen px-6">
-        <div className="text-center max-w-4xl">
-          {/* Animated city emoji */}
-          <div className="mb-8 text-8xl animate-bounce">🏙️</div>
+      {/* Grid Overlay */}
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(252,238,10,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(252,238,10,0.05)_1px,transparent_1px)] bg-[size:50px_50px] pointer-events-none" />
+      <div className="absolute inset-0 scanline pointer-events-none" />
 
-          {/* Title with gradient animation */}
-          <h1 className="text-6xl md:text-8xl font-black mb-6 animate-in fade-in slide-in-from-bottom-4 duration-1000">
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 animate-gradient">
-              AGENTROPOLIS
-            </span>
-          </h1>
+      {/* Content Overlay */}
+      <div className={`
+        relative z-10 flex flex-col items-center justify-center min-h-screen px-6 transition-all duration-1000 ease-in-out
+        ${isTransitioning ? 'scale-150 opacity-0 blur-lg' : 'scale-100 opacity-100'}
+      `}>
 
-          <p className="text-2xl md:text-3xl text-gray-300 mb-4 font-light animate-in fade-in slide-in-from-bottom-3 duration-1000 delay-150">
-            Build a city of agents. Approve their plans.
-            <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400">
-              Execute trades on-chain.
-            </span>
-          </p>
-
-          <p className="text-lg text-gray-400 max-w-2xl mx-auto mb-12 animate-in fade-in duration-1000 delay-300">
-            A gamified 3D DeFi platform where AI agents propose trades in your cyberpunk city council.
-            You decide what gets executed on Uniswap v4.
-          </p>
-
-          {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16 animate-in fade-in slide-in-from-bottom-2 duration-1000 delay-450">
-            <Link
-              href="/app"
-              className="group relative px-8 py-4 bg-gradient-to-r from-yellow-500 to-orange-500 text-black rounded-xl font-bold text-lg shadow-lg shadow-yellow-500/25 hover:shadow-yellow-500/50 transition-all overflow-hidden"
-            >
-              <span className="relative z-10">🚀 Launch App</span>
-              <div className="absolute inset-0 bg-gradient-to-r from-yellow-400 to-orange-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </Link>
-
-            <button
-              onClick={handleTryAsGuest}
-              className="px-8 py-4 bg-gray-800/60 backdrop-blur-sm text-white rounded-xl hover:bg-gray-700/60 transition-all font-semibold text-lg border border-cyan-500/30 hover:border-cyan-500/60 hover:shadow-lg hover:shadow-cyan-500/20"
-            >
-              👀 Try as Guest
-            </button>
-
-            <Link
-              href="/docs"
-              className="px-8 py-4 bg-transparent text-gray-400 rounded-xl hover:text-white transition-all font-semibold text-lg border border-gray-800 hover:border-cyan-500/50"
-            >
-              📚 Docs
-            </Link>
+        {/* Main Title Block */}
+        <div className="mb-12 relative text-center">
+          <div className="border border-[#FCEE0A] p-2 inline-block mb-4 clip-corner-tr bg-black/50 backdrop-blur">
+            <span className="bg-[#FCEE0A] text-black px-4 py-1 font-bold tracking-widest text-sm uppercase">System Online</span>
           </div>
 
-          {/* Feature Cards */}
-          <div className="grid md:grid-cols-3 gap-6 text-left max-w-5xl mx-auto animate-in fade-in duration-1000 delay-600">
-            <FeatureCard
-              icon="⚡"
-              title="Yellow Network"
-              description="Instant off-chain micro-actions with on-chain settlement. Deploy agents without gas fees."
-              color="from-yellow-400/20 to-orange-400/20"
-              borderColor="border-yellow-400/30"
-            />
+          <h1 className="text-8xl md:text-9xl font-black text-white tracking-tighter mb-2 text-glitch select-none" data-text={glitchText}>
+            {glitchText}
+          </h1>
 
-            <FeatureCard
-              icon="🤖"
-              title="AI Agents"
-              description="Deploy agents that analyze markets and propose optimal trades in a 3D cyberpunk city."
-              color="from-cyan-400/20 to-blue-400/20"
-              borderColor="border-cyan-400/30"
-            />
-
-            <FeatureCard
-              icon="🦄"
-              title="Uniswap v4"
-              description="Approved proposals execute real swaps on Uniswap v4. Full transparency with on-chain TxIDs."
-              color="from-pink-400/20 to-purple-400/20"
-              borderColor="border-pink-400/30"
-            />
+          <div className="flex items-center justify-center gap-4 text-[#FCEE0A] tracking-[0.5em] text-sm uppercase font-bold">
+            <span>Build</span>
+            <span className="w-2 h-2 bg-[#FCEE0A] rotate-45 animate-pulse"></span>
+            <span>Command</span>
+            <span className="w-2 h-2 bg-[#FCEE0A] rotate-45 animate-pulse delay-75"></span>
+            <span>Execute</span>
           </div>
         </div>
 
-        {/* Footer */}
-        <footer className="absolute bottom-6 text-gray-600 text-sm animate-in fade-in duration-1000 delay-1000">
-          Built for HackMoney 2026 🏆
-        </footer>
+        {/* Description Panel */}
+        <div className="cyber-panel p-8 max-w-3xl w-full mb-12 text-center">
+          <p className="text-gray-300 text-lg leading-relaxed mb-6 font-medium tracking-wide">
+            <strong className="text-[#FCEE0A]">TACTICAL DEFI PROTOCOL:</strong> Deploy autonomous agents into the neural city grid.
+            Authorize on-chain execution via the Council.
+          </p>
+
+          <div className="flex justify-center gap-8 text-sm text-[#00F0FF] font-mono border-t border-[#FCEE0A]/20 pt-4">
+            <span className="animate-pulse"> [ STATUS: LIVE ] </span>
+            <span> [ NET: YELLOW ] </span>
+            <span> [ GAS: 0.00 ] </span>
+          </div>
+        </div>
+
+        {/* CTA Buttons */}
+        <div className="flex flex-col sm:flex-row gap-6 mb-20 z-20">
+          <button
+            onClick={handleLaunch}
+            disabled={isTransitioning}
+            className="btn-cyber w-64 h-16 text-xl clip-corner-tr"
+          >
+            INITIALIZE APP
+          </button>
+
+          <button
+            onClick={handleLaunch}
+            disabled={isTransitioning}
+            className="btn-cyber-outline w-64 h-16 text-xl clip-corner-tr"
+          >
+            GUEST ACCESS
+          </button>
+        </div>
+
+        {/* Footer Stats */}
+        <div className="absolute bottom-0 left-0 w-full border-t border-[#FCEE0A]/20 bg-black/80 backdrop-blur-md p-4">
+          <div className="container mx-auto flex justify-between items-center text-xs text-[#666] uppercase tracking-widest font-mono">
+            <div>SYS.VER.2.0.4 // AGENTROPOLIS_CORE</div>
+            <div className="flex gap-8 hidden md:flex">
+              <span><span className="text-[#FCEE0A]">ACTIVE_NODES:</span> 8,492</span>
+              <span><span className="text-[#FCEE0A]">TOTAL_VALUE:</span> $42.8M</span>
+              <span><span className="text-[#FCEE0A]">UPTIME:</span> 99.99%</span>
+            </div>
+            <div>SECURE_CONNECTION_ESTABLISHED</div>
+          </div>
+        </div>
+
       </div>
 
-      <style jsx>{`
-        @keyframes gradient {
-          0%, 100% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-        }
-        .animate-gradient {
-          background-size: 200% 200%;
-          animation: gradient 3s ease infinite;
-        }
-      `}</style>
+      {/* Transition Overlay */}
+      {isTransitioning && (
+        <div className="fixed inset-0 bg-[#050510] z-50 flex items-center justify-center pointer-events-none">
+          <div className="text-center w-full max-w-md">
+            <div className="text-[#FCEE0A] text-4xl font-mono mb-4 animate-pulse uppercase tracking-[0.2em]">{'>'} SYSTEM_BOOT SEQUENCE</div>
+            <div className="w-full h-1 bg-[#1a1a1a] overflow-hidden">
+              <div className="h-full bg-[#FCEE0A] animate-[width_1s_ease-in-out_forwards]" style={{ width: '0%' }}></div>
+            </div>
+            <div className="flex justify-between text-[#00F0FF] text-xs font-mono mt-2">
+              <span>LOADING ASSETS...</span>
+              <span>100%</span>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
-  )
-}
-
-function FeatureCard({
-  icon,
-  title,
-  description,
-  color,
-  borderColor,
-}: {
-  icon: string
-  title: string
-  description: string
-  color: string
-  borderColor: string
-}) {
-  return (
-    <div className={`
-      group relative bg-gradient-to-br ${color} backdrop-blur-xl 
-      rounded-2xl p-6 border ${borderColor} 
-      hover:scale-105 transition-all duration-300
-      hover:shadow-xl hover:shadow-cyan-500/10
-    `}>
-      <div className="text-5xl mb-4 group-hover:scale-110 transition-transform duration-300">
-        {icon}
-      </div>
-      <h3 className="text-xl font-bold text-white mb-3">
-        {title}
-      </h3>
-      <p className="text-gray-300 text-sm leading-relaxed">
-        {description}
-      </p>
-
-      {/* Glow effect on hover */}
-      <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-cyan-400/0 to-purple-400/0 group-hover:from-cyan-400/10 group-hover:to-purple-400/10 transition-all duration-300" />
-    </div>
   )
 }

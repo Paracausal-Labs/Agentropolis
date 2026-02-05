@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import dynamic from 'next/dynamic'
-import { COLORS } from '@/lib/game-constants'
 
 // Dynamically import 3D components (client-side only)
 const CityView3D = dynamic(() => import('./game/CityView3D'), { ssr: false })
@@ -19,46 +18,60 @@ export function AppPageContent() {
     setTimeout(() => {
       setCurrentScene(scene)
       setIsTransitioning(false)
-    }, 300)
+    }, 400)
   }
 
   return (
-    <div className="w-full h-screen bg-gradient-to-b from-[#0a0a1a] to-[#0f172a] relative overflow-hidden">
-      {/* Top Header Bar */}
-      <header className="absolute top-0 left-0 right-0 z-50 bg-gradient-to-b from-black/80 to-transparent backdrop-blur-sm">
-        <div className="container mx-auto px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">🏙️</span>
-            <h1 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400">
-              Agentropolis
-            </h1>
+    <div className="w-full h-screen bg-[#050510] relative overflow-hidden font-[Rajdhani]">
+      {/* Grid Overlay */}
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(252,238,10,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(252,238,10,0.03)_1px,transparent_1px)] bg-[size:30px_30px] pointer-events-none" />
+
+      {/* Top Header Bar - CYBER HEADER */}
+      <header className="absolute top-0 left-0 right-0 z-50 pointer-events-none p-4">
+        <div className="pointer-events-auto flex justify-between items-start">
+
+          {/* Left Module - Title */}
+          <div className="cyber-panel px-6 py-3 clip-corner-tr flex items-center gap-4">
+            <div className="text-3xl filter drop-shadow-[0_0_5px_rgba(252,238,10,0.8)]">🏙️</div>
+            <div>
+              <h1 className="text-2xl font-black text-white uppercase tracking-widest leading-none flex items-center gap-2">
+                AGENTROPOLIS <span className="text-[#FCEE0A] text-xs align-top border border-[#FCEE0A] px-1">BETA</span>
+              </h1>
+              <div className="flex gap-2 text-[10px] text-[#00F0FF] font-mono mt-1">
+                <span>SYS: ONLINE</span>
+                <span>//</span>
+                <span>PING: 12ms</span>
+              </div>
+            </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 px-4 py-2 bg-black/40 rounded-lg border border-gray-700/50">
-              <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-              <span className="text-sm text-gray-300">Session Active</span>
+          {/* Right Module - Status */}
+          <div className="flex gap-4">
+            {/* Live Status */}
+            <div className="cyber-panel px-4 py-2 flex flex-col items-center justify-center min-w-[80px]">
+              <span className="text-[10px] text-gray-400 uppercase tracking-wider">Status</span>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-[#00FF00] rounded-full animate-pulse shadow-[0_0_8px_#00FF00]"></div>
+                <span className="text-[#00FF00] font-bold">LIVE</span>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2 px-4 py-2 bg-black/40 rounded-lg border border-gray-700/50">
-              <span className="text-sm text-gray-400">Balance:</span>
-              <span className="text-sm font-mono text-cyan-400">0.95 ETH</span>
+            {/* Balance */}
+            <div className="cyber-panel px-6 py-2 min-w-[140px]">
+              <span className="text-[10px] text-[#FCEE0A] uppercase tracking-wider block mb-0.5">Wallet Balance</span>
+              <span className="text-xl font-mono text-white tracking-wide">0.95 <span className="text-gray-500 text-sm">ETH</span></span>
             </div>
 
-            <button className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:shadow-lg hover:shadow-purple-500/50 transition-all font-semibold text-sm">
-              Connect Wallet
+            {/* Connect */}
+            <button className="btn-cyber-outline hover:bg-[#FCEE0A] hover:text-black py-2 h-auto text-sm clip-corner-tr pointer-events-auto">
+              CONNECT_WALLET
             </button>
           </div>
         </div>
       </header>
 
       {/* Scene Container with Transition */}
-      <div
-        className={`
-          w-full h-full transition-opacity duration-300
-          ${isTransitioning ? 'opacity-0' : 'opacity-100'}
-        `}
-      >
+      <div className={`w-full h-full transition-all duration-300 ${isTransitioning ? 'opacity-0 scale-105 blur-sm' : 'opacity-100 scale-100 blur-0'}`}>
         {currentScene === 'city' && (
           <CityView3D onEnterCouncil={() => handleSceneChange('council')} />
         )}
@@ -68,45 +81,64 @@ export function AppPageContent() {
         )}
       </div>
 
-      {/* Loading overlay during transition */}
+      {/* Transition Overlay */}
       {isTransitioning && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-40">
+        <div className="absolute inset-0 flex items-center justify-center bg-[#050510]/80 backdrop-blur-md z-40 pointer-events-none">
           <div className="text-center">
-            <div className="w-16 h-16 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-white text-lg font-semibold">
-              {currentScene === 'city' ? 'Entering Council...' : 'Returning to City...'}
-            </p>
+            <div className="text-[#FCEE0A] font-mono text-2xl uppercase tracking-[0.2em] mb-2 animate-pulse">
+              {currentScene === 'city' ? 'ACCESSING COUNCIL CHAMBER...' : 'REROUTING TO CITY VIEW...'}
+            </div>
+            <div className="h-[2px] w-64 bg-[#FCEE0A]/20 mx-auto">
+              <div className="h-full bg-[#FCEE0A] animate-[width_0.4s_ease-out_forwards]" style={{ width: '0%' }}></div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Scene Indicator (bottom left) */}
-      <div className="absolute bottom-6 left-6 z-50 flex flex-col gap-2">
-        <button
-          onClick={() => handleSceneChange('city')}
-          className={`
-            px-4 py-2 rounded-lg font-medium text-sm transition-all
-            ${currentScene === 'city'
-              ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/50'
-              : 'bg-gray-800/60 text-gray-400 hover:bg-gray-700/60'
-            }
-          `}
-        >
-          🏙️ City View
-        </button>
-        <button
-          onClick={() => handleSceneChange('council')}
-          className={`
-            px-4 py-2 rounded-lg font-medium text-sm transition-all
-            ${currentScene === 'council'
-              ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/50'
-              : 'bg-gray-800/60 text-gray-400 hover:bg-gray-700/60'
-            }
-          `}
-        >
-          🏛️ Council Room
-        </button>
+      {/* Scene Navigation - Tactical Switches */}
+      <div className="absolute bottom-8 left-8 z-50 pointer-events-none">
+        <div className="cyber-panel p-2 flex gap-4 pointer-events-auto clip-corner-all">
+          <button
+            onClick={() => handleSceneChange('city')}
+            className={`
+              px-6 py-3 font-bold uppercase tracking-wider transition-all duration-200 clip-corner-tr border
+              ${currentScene === 'city'
+                ? 'bg-[#FCEE0A] text-black border-[#FCEE0A] shadow-[0_0_15px_rgba(252,238,10,0.4)]'
+                : 'bg-transparent text-gray-500 border-gray-700 hover:border-[#FCEE0A] hover:text-[#FCEE0A]'
+              }
+            `}
+          >
+            CITY_VIEW
+          </button>
+          <button
+            onClick={() => handleSceneChange('council')}
+            className={`
+              px-6 py-3 font-bold uppercase tracking-wider transition-all duration-200 clip-corner-tr border
+              ${currentScene === 'council'
+                ? 'bg-[#FF00FF] text-white border-[#FF00FF] shadow-[0_0_15px_rgba(255,0,255,0.4)]'
+                : 'bg-transparent text-gray-500 border-gray-700 hover:border-[#FF00FF] hover:text-[#FF00FF]'
+              }
+            `}
+          >
+            COUNCIL_CHAMBER
+          </button>
+        </div>
       </div>
+
+      {/* Decorative HUD Elements */}
+      <div className="absolute bottom-8 right-8 pointer-events-none hidden md:block opacity-50">
+        <div className="text-right font-mono text-[10px] text-[#FCEE0A] leading-tight mb-2">
+          COORDS: 45.92, -12.04, 88.2<br />
+          GRID: ALPHA-7<br />
+          WIND: 12km/h NE
+        </div>
+        <div className="w-32 h-32 border border-[#FCEE0A]/30 rounded-full relative flex items-center justify-center animate-[spin_10s_linear_infinite]">
+          <div className="absolute top-0 bottom-0 w-[1px] bg-[#FCEE0A]/30"></div>
+          <div className="absolute left-0 right-0 h-[1px] bg-[#FCEE0A]/30"></div>
+          <div className="w-24 h-24 border border-[#FCEE0A]/20 rounded-full"></div>
+        </div>
+      </div>
+
     </div>
   )
 }

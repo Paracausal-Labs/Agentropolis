@@ -124,18 +124,28 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
             </Scene3D>
 
             {/* UI Overlay */}
-            <div className="absolute inset-0 pointer-events-none">
-                {/* Header */}
-                <div className="p-4 flex justify-between items-center pointer-events-auto">
-                    <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400">
-                        🏛️ THE COUNCIL
-                    </h1>
-                    <button
-                        onClick={onBack}
-                        className="px-4 py-2 bg-gray-800/80 hover:bg-gray-700/80 text-white rounded-lg transition-all"
-                    >
-                        ← Back to City
-                    </button>
+            <div className="absolute inset-0 pointer-events-none font-[Rajdhani]">
+                {/* Header - CYBER REDESIGN */}
+                <div className="p-4 pt-24 pointer-events-auto">
+                    <div className="flex justify-between items-start">
+                        <div className="cyber-panel px-6 py-3 clip-corner-tr flex items-center gap-4">
+                            <span className="text-3xl filter drop-shadow-[0_0_8px_rgba(252,238,10,0.6)]">🏛️</span>
+                            <div>
+                                <h1 className="text-2xl font-black text-white uppercase tracking-widest leading-none">
+                                    COUNCIL_CHAMBER
+                                </h1>
+                                <p className="text-[10px] text-[#00F0FF] font-mono mt-0.5 tracking-wide">
+                                    // SEQUENCING_DELIBERATION_PROTOCOL
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={onBack}
+                            className="btn-cyber-outline py-2 px-6 h-auto text-sm clip-corner-tr bg-black/60 hover:bg-[#FCEE0A] hover:text-black transition-all"
+                        >
+                            {'<'} RETURN_TO_CITY
+                        </button>
+                    </div>
                 </div>
 
                 {/* Speech bubbles */}
@@ -149,41 +159,63 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
                     />
                 ))}
 
-                {/* Bottom Panel - Prompt Input */}
+                {/* Bottom Panel - Prompt Input - CYBER REDESIGN */}
                 <div className="absolute bottom-0 left-0 right-0 p-6 pointer-events-auto">
-                    <div className="max-w-4xl mx-auto bg-gradient-to-br from-gray-900/95 to-purple-900/95 backdrop-blur-xl rounded-2xl border border-cyan-500/30 p-6 shadow-2xl">
-                        <h3 className="text-lg font-semibold text-white mb-4">What would you like to do?</h3>
+                    <div className="max-w-5xl mx-auto">
+                        <div className="cyber-panel clip-corner-all p-1">
+                            {/* Header */}
+                            <div className="bg-[#FCEE0A]/10 border-b border-[#FCEE0A]/30 px-6 py-3 flex justify-between items-center">
+                                <h3 className="text-sm font-bold text-[#FCEE0A] tracking-widest leading-none flex items-center gap-2">
+                                    <span className="w-2 h-2 bg-[#FCEE0A] animate-pulse"></span>
+                                    COMMAND_INTERFACE
+                                </h3>
+                                <p className="text-[10px] text-gray-400 font-mono">
+                                    STATUS: AWAITING_INPUT
+                                </p>
+                            </div>
 
-                        {/* Preset Buttons */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
-                            {PRESET_PROMPTS.map((preset) => (
-                                <button
-                                    key={preset.label}
-                                    onClick={() => setCurrentPrompt(preset.prompt)}
-                                    className="px-4 py-3 bg-gray-800/60 hover:bg-gray-700/60 text-white rounded-lg text-sm font-medium transition-all border border-gray-700/50 hover:border-cyan-500/50"
-                                >
-                                    {preset.emoji} {preset.label.split(' ').slice(1).join(' ')}
-                                </button>
-                            ))}
-                        </div>
+                            {/* Content */}
+                            <div className="p-6 bg-black/40">
+                                {/* Preset Buttons */}
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                                    {PRESET_PROMPTS.map((preset) => (
+                                        <button
+                                            key={preset.label}
+                                            onClick={() => setCurrentPrompt(preset.prompt)}
+                                            className="group relative px-4 py-3 bg-[#050510] border border-[#FCEE0A]/30 hover:border-[#FCEE0A] text-white text-left transition-all hover:bg-[#FCEE0A]/10"
+                                        >
+                                            <div className="absolute top-0 right-0 w-2 h-2 border-t border-r border-[#FCEE0A] group-hover:w-full group-hover:h-full transition-all duration-300"></div>
+                                            <div className="flex flex-col">
+                                                <span className="text-xl mb-1">{preset.emoji}</span>
+                                                <span className="text-[10px] text-[#00F0FF] font-mono mb-0.5">{preset.label.split(':')[0]}</span>
+                                                <span className="text-xs font-bold tracking-wide">{preset.label.split(':')[1]}</span>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
 
-                        {/* Input */}
-                        <div className="flex gap-3">
-                            <input
-                                type="text"
-                                value={currentPrompt}
-                                onChange={(e) => setCurrentPrompt(e.target.value)}
-                                placeholder="Type your request..."
-                                className="flex-1 px-4 py-3 bg-black/40 text-white rounded-lg border border-gray-700/50 focus:border-cyan-500/50 focus:outline-none"
-                                disabled={isDeliberating}
-                            />
-                            <button
-                                onClick={handleConsult}
-                                disabled={isDeliberating || !currentPrompt.trim()}
-                                className="px-8 py-3 bg-gradient-to-r from-cyan-500 to-purple-500 text-white rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg hover:shadow-cyan-500/50 transition-all"
-                            >
-                                {isDeliberating ? '⏳ Deliberating...' : '🚀 Consult Council'}
-                            </button>
+                                {/* Input */}
+                                <div className="flex gap-4">
+                                    <div className="flex-1 relative">
+                                        <input
+                                            type="text"
+                                            value={currentPrompt}
+                                            onChange={(e) => setCurrentPrompt(e.target.value)}
+                                            placeholder="ENTER_COMMAND_PARAMETERS..."
+                                            className="w-full px-6 py-4 bg-[#050510] text-[#00F0FF] border border-[#FCEE0A]/30 focus:border-[#FCEE0A] focus:outline-none focus:bg-[#FCEE0A]/5 font-mono tracking-wide placeholder-gray-600 clip-corner-tr"
+                                            disabled={isDeliberating}
+                                        />
+                                        <div className="absolute right-3 bottom-2 text-[10px] text-[#FCEE0A]/50 font-mono">_</div>
+                                    </div>
+                                    <button
+                                        onClick={handleConsult}
+                                        disabled={isDeliberating || !currentPrompt.trim()}
+                                        className="btn-cyber w-64 clip-corner-tr disabled:opacity-50 disabled:grayscale"
+                                    >
+                                        {isDeliberating ? 'PROCESSING...' : 'EXECUTE >>'}
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -203,22 +235,26 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
     )
 }
 
-// Components
+// Components remain similar but styled... 
 function RoundTable() {
     return (
         <group>
             <mesh position={[0, 0.5, 0]} castShadow receiveShadow>
                 <cylinderGeometry args={[2, 2, 0.2, 32]} />
                 <meshStandardMaterial
-                    color={COLORS.building.base}
-                    metalness={0.8}
-                    roughness={0.2}
+                    color="#1a1a1a"
+                    metalness={0.9}
+                    roughness={0.1}
                 />
             </mesh>
             {/* Glowing edge */}
             <mesh position={[0, 0.5, 0]}>
-                <torusGeometry args={[2, 0.05, 16, 32]} />
-                <meshBasicMaterial color={COLORS.neon.cyan} />
+                <torusGeometry args={[2, 0.02, 16, 64]} />
+                <meshBasicMaterial color="#FCEE0A" toneMapped={false} />
+            </mesh>
+            <mesh position={[0, 0.1, 0]}>
+                <cylinderGeometry args={[2.2, 2.2, 0.05, 32]} />
+                <meshBasicMaterial color="#FCEE0A" transparent opacity={0.1} />
             </mesh>
         </group>
     )
@@ -229,39 +265,52 @@ function SpeakingIndicator({ position, color }: { position: [number, number, num
 
     useFrame((state) => {
         if (ref.current) {
-            ref.current.scale.setScalar(1 + Math.sin(state.clock.elapsedTime * 4) * 0.3)
+            ref.current.scale.setScalar(1 + Math.sin(state.clock.elapsedTime * 10) * 0.1)
+            ref.current.rotation.z += 0.02
         }
     })
 
     return (
-        <mesh ref={ref} position={[position[0], position[1] + 2, position[2]]}>
-            <ringGeometry args={[0.8, 1, 32]} />
-            <meshBasicMaterial color={color} transparent opacity={0.6} side={THREE.DoubleSide} />
+        <mesh ref={ref} position={[position[0], position[1] + 2.5, position[2]]}>
+            <octahedronGeometry args={[0.3, 0]} />
+            <meshBasicMaterial color={color} wireframe />
         </mesh>
     )
 }
 
 function SpeechBubble({ agent, stance, reasoning, isActive }: Opinion & { isActive: boolean }) {
-    const stanceColor = {
-        support: 'border-green-500',
-        concern: 'border-yellow-500',
-        oppose: 'border-red-500',
-        neutral: 'border-gray-500',
+    const stanceColors = {
+        support: 'border-[#00FF00] text-[#00FF00]',
+        concern: 'border-[#FFD700] text-[#FFD700]',
+        oppose: 'border-[#FF0000] text-[#FF0000]',
+        neutral: 'border-[#888888] text-[#888888]',
     }[stance]
 
     return (
         <div
             className={`
-        absolute top-20 left-1/2 -translate-x-1/2 max-w-lg
-        bg-black/80 backdrop-blur-xl rounded-xl border-2 ${stanceColor} p-4
+        absolute top-24 left-1/2 -translate-x-1/2 max-w-xl
+        bg-black/90 backdrop-blur-md p-0.5 clip-corner-all
         transition-all duration-300
         ${isActive ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}
       `}
         >
-            <p className="text-white text-sm leading-relaxed">{reasoning}</p>
-            <p className="text-gray-400 text-xs mt-2">
-                - {AGENT_TYPES[agent as keyof typeof AGENT_TYPES]?.name}
-            </p>
+            <div className={`border ${stanceColors.split(' ')[0]} p-6 clip-corner-all bg-[#050510]`}>
+                <div className="flex justify-between items-center mb-2 border-b border-gray-800 pb-2">
+                    <span className="text-[10px] text-gray-500 font-mono tracking-widest">INCOMING_TRANSMISSION</span>
+                    <span className={`text-xs font-bold uppercase ${stanceColors.split(' ')[1]}`}>
+                        [{stance.toUpperCase()}]
+                    </span>
+                </div>
+                <p className="text-white text-lg font-mono leading-relaxed typewriter-text">
+                    "{reasoning}"
+                </p>
+                <div className="mt-3 text-right">
+                    <span className="bg-[#FCEE0A] text-black text-[10px] px-2 py-0.5 font-bold uppercase tracking-widest">
+                        {AGENT_TYPES[agent as keyof typeof AGENT_TYPES]?.name}
+                    </span>
+                </div>
+            </div>
         </div>
     )
 }
@@ -276,62 +325,78 @@ function ProposalCard({
     onReject: () => void
 }) {
     return (
-        <div className="bg-gradient-to-br from-gray-900/98 to-purple-900/98 backdrop-blur-xl rounded-2xl border-2 border-cyan-500/50 p-6 shadow-2xl shadow-cyan-500/30 animate-in fade-in zoom-in duration-300">
-            <h2 className="text-2xl font-bold text-white mb-4">📜 Council Proposal</h2>
+        <div className="cyber-panel clip-corner-all p-1 animate-in zoom-in duration-300">
+            <div className="bg-[#050510] p-6 clip-corner-all">
+                {/* Header */}
+                <div className="flex justify-between items-center mb-6 border-b border-[#FCEE0A]/30 pb-4">
+                    <div>
+                        <h2 className="text-2xl font-black text-white uppercase tracking-widest leading-none">
+                            PROPOSAL_0x8F2
+                        </h2>
+                        <span className="text-[10px] text-[#00F0FF] font-mono">HASH: 7a9...f42c</span>
+                    </div>
+                    <div className="text-xs border border-[#FCEE0A] text-[#FCEE0A] px-2 py-1 uppercase tracking-wider">
+                        AWAITING_AUTH
+                    </div>
+                </div>
 
-            <div className="space-y-3 mb-6">
-                <div className="flex justify-between items-center">
-                    <span className="text-gray-400">Action:</span>
-                    <span className="text-white font-semibold">{proposal.action}</span>
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div className="bg-[#FCEE0A]/5 p-3 border-l-2 border-[#FCEE0A]">
+                        <div className="text-[10px] text-gray-500 font-mono uppercase">Action Protocol</div>
+                        <div className="text-white font-bold tracking-wide">{proposal.action}</div>
+                    </div>
+                    <div className="bg-[#FCEE0A]/5 p-3 border-l-2 border-[#FCEE0A]">
+                        <div className="text-[10px] text-gray-500 font-mono uppercase">Value Transfer</div>
+                        <div className="text-white font-mono">{proposal.amount}</div>
+                    </div>
+                    <div className="bg-[#FCEE0A]/5 p-3 border-l-2 border-[#FCEE0A]">
+                        <div className="text-[10px] text-gray-500 font-mono uppercase">Yield Projection</div>
+                        <div className="text-[#00FF00] font-mono">{proposal.expected}</div>
+                    </div>
+                    <div className="bg-[#FCEE0A]/5 p-3 border-l-2 border-[#FCEE0A]">
+                        <div className="text-[10px] text-gray-500 font-mono uppercase">Risk Factor</div>
+                        <div className={`${proposal.risk === 'low' ? 'text-[#00FF00]' : proposal.risk === 'medium' ? 'text-[#FFD700]' : 'text-[#FF0000]'} font-bold uppercase`}>
+                            {proposal.risk.toUpperCase()}
+                        </div>
+                    </div>
                 </div>
-                <div className="flex justify-between items-center">
-                    <span className="text-gray-400">Amount:</span>
-                    <span className="text-white">{proposal.amount}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                    <span className="text-gray-400">Expected:</span>
-                    <span className="text-green-400">{proposal.expected}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                    <span className="text-gray-400">Risk:</span>
-                    <span className={`font-semibold ${proposal.risk === 'low' ? 'text-green-400' :
-                            proposal.risk === 'medium' ? 'text-yellow-400' :
-                                'text-red-400'
-                        }`}>
-                        {proposal.risk.toUpperCase()}
-                    </span>
-                </div>
-            </div>
 
-            <div className="bg-black/40 rounded-lg p-4 mb-4">
-                <p className="text-sm text-gray-300 leading-relaxed">{proposal.reasoning}</p>
-            </div>
+                <div className="bg-[#222] border border-gray-700 p-4 mb-6 relative">
+                    <div className="absolute top-0 left-0 bg-[#FCEE0A] text-black text-[9px] px-1 font-bold">ANALYSIS</div>
+                    <p className="text-sm text-gray-300 font-mono leading-relaxed pt-2 opacity-80">
+                        {proposal.reasoning}
+                    </p>
+                </div>
 
-            <div className="flex gap-2 mb-6">
-                <div className="flex-1 text-center">
-                    <span className="text-green-400 font-bold">🟢 Support: {proposal.votes.support}</span>
+                <div className="flex gap-2 mb-6 font-mono text-xs">
+                    <div className="flex-1 bg-black border border-[#00FF00]/30 p-2 text-center">
+                        <div className="text-[#00FF00] font-bold text-lg">{proposal.votes.support}</div>
+                        <div className="text-gray-500">SUPPORT</div>
+                    </div>
+                    <div className="flex-1 bg-black border border-[#FF0000]/30 p-2 text-center">
+                        <div className="text-[#FF0000] font-bold text-lg">{proposal.votes.oppose}</div>
+                        <div className="text-gray-500">OPPOSE</div>
+                    </div>
+                    <div className="flex-1 bg-black border border-gray-700 p-2 text-center">
+                        <div className="text-gray-400 font-bold text-lg">{proposal.votes.abstain}</div>
+                        <div className="text-gray-600">ABSTAIN</div>
+                    </div>
                 </div>
-                <div className="flex-1 text-center">
-                    <span className="text-red-400 font-bold">🔴 Oppose: {proposal.votes.oppose}</span>
-                </div>
-                <div className="flex-1 text-center">
-                    <span className="text-gray-400 font-bold">⚪ Abstain: {proposal.votes.abstain}</span>
-                </div>
-            </div>
 
-            <div className="flex gap-4">
-                <button
-                    onClick={onApprove}
-                    className="flex-1 py-4 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl font-bold text-lg hover:shadow-lg hover:shadow-green-500/50 transition-all"
-                >
-                    ✅ APPROVE TRADE
-                </button>
-                <button
-                    onClick={onReject}
-                    className="flex-1 py-4 bg-gray-800 text-white rounded-xl font-bold text-lg border border-gray-700 hover:bg-gray-700 transition-all"
-                >
-                    ❌ REJECT
-                </button>
+                <div className="flex gap-4">
+                    <button
+                        onClick={onApprove}
+                        className="flex-1 btn-cyber clip-corner-tr hover:bg-[#00FF00] hover:shadow-[0_0_20px_#00FF00]"
+                    >
+                        CONFIRM_EXECUTION
+                    </button>
+                    <button
+                        onClick={onReject}
+                        className="flex-1 py-4 bg-transparent border border-[#FF0000] text-[#FF0000] font-bold tracking-widest uppercase hover:bg-[#FF0000] hover:text-white transition-all clip-corner-tr"
+                    >
+                        ABORT
+                    </button>
+                </div>
             </div>
         </div>
     )

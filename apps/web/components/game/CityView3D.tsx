@@ -139,7 +139,7 @@ export default function CityView3D({ onEnterCouncil }: { onEnterCouncil: () => v
             </Scene3D>
 
             {/* UI Overlay - Agent Deployment Panel */}
-            <div className="absolute top-4 right-4 w-80 max-h-[calc(100vh-2rem)] overflow-y-auto">
+            <div className="absolute top-24 right-4 w-80 max-h-[calc(100vh-8rem)] overflow-y-auto cyber-panel clip-corner-all">
                 <AgentPanel
                     agents={MOCK_AGENTS}
                     deployedCount={deployedAgents.length}
@@ -148,12 +148,17 @@ export default function CityView3D({ onEnterCouncil }: { onEnterCouncil: () => v
                 />
             </div>
 
-            {/* Bottom Bar */}
-            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
-                <div className="container mx-auto flex justify-between items-center text-white">
-                    <div className="flex gap-6">
-                        <span className="text-sm">Agents: {deployedAgents.length}/6</span>
-                        <span className="text-sm text-cyan-400">Click Council Hall to deliberate</span>
+            {/* Bottom Bar - Tactical Info */}
+            <div className="absolute bottom-0 left-0 right-0 bg-[#050510]/90 border-t border-[#FCEE0A]/30 p-2 pointer-events-none">
+                <div className="container mx-auto flex justify-between items-center font-mono text-xs">
+                    <div className="flex gap-6 items-center">
+                        <span className="text-[#FCEE0A] uppercase tracking-wider">
+                            ACTIVE_AGENTS: <span className="text-white font-bold ml-1">{deployedAgents.length}/6</span>
+                        </span>
+                        <div className="h-4 w-[1px] bg-[#FCEE0A]/30"></div>
+                        <span className="text-[#00F0FF] animate-pulse">
+                            {'>'} AWAITING_ORDERS
+                        </span>
                     </div>
                 </div>
             </div>
@@ -161,7 +166,7 @@ export default function CityView3D({ onEnterCouncil }: { onEnterCouncil: () => v
     )
 }
 
-// Agent Deployment Panel Component
+// Agent Deployment Panel Component - CYBERPUNK THEME
 function AgentPanel({
     agents,
     deployedCount,
@@ -174,12 +179,29 @@ function AgentPanel({
     deployedIds: string[]
 }) {
     return (
-        <div className="bg-gradient-to-br from-gray-900/95 to-purple-900/95 backdrop-blur-xl rounded-2xl border border-cyan-500/30 p-4 shadow-2xl shadow-cyan-500/20">
-            <h2 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 mb-4">
-                🤖 Deploy Agents
-            </h2>
+        <div className="bg-transparent overflow-hidden">
+            {/* Header */}
+            <div className="bg-[#FCEE0A]/10 border-b border-[#FCEE0A]/30 px-5 py-3 flex items-center justify-between">
+                <div>
+                    <h2 className="text-lg font-black text-[#FCEE0A] uppercase tracking-widest leading-none">
+                        UNIT_DEPLOY
+                    </h2>
+                    <div className="flex gap-1 mt-1">
+                        <span className="w-1 h-1 bg-[#FCEE0A]"></span>
+                        <span className="w-1 h-1 bg-[#FCEE0A]"></span>
+                        <span className="w-1 h-1 bg-[#FCEE0A]"></span>
+                    </div>
+                </div>
+                <div className="text-right">
+                    <div className="text-[10px] text-[#00F0FF] uppercase font-mono">Capacity</div>
+                    <div className="text-xl font-bold text-white leading-none font-mono">
+                        {deployedCount}<span className="text-gray-500 text-sm">/6</span>
+                    </div>
+                </div>
+            </div>
 
-            <div className="space-y-3 mb-4">
+            {/* Agent List */}
+            <div className="p-3 space-y-2">
                 {agents.map((agent) => {
                     const isDeployed = deployedIds.includes(agent.id)
 
@@ -187,44 +209,50 @@ function AgentPanel({
                         <div
                             key={agent.id}
                             className={`
-                bg-black/40 rounded-xl p-3 border transition-all duration-300
-                ${isDeployed ? 'border-green-500/50' : 'border-gray-700/50 hover:border-cyan-500/50'}
-              `}
+                                relative p-3 border-l-2 transition-all duration-200 group
+                                ${isDeployed
+                                    ? 'bg-[#FCEE0A]/5 border-[#00FF00]'
+                                    : 'bg-black/40 border-[#FCEE0A]/30 hover:bg-[#FCEE0A]/5 hover:border-[#FCEE0A]'
+                                }
+                            `}
                         >
+                            {/* Agent Info */}
                             <div className="flex justify-between items-start mb-2">
                                 <div>
-                                    <h3 className="font-bold text-white">{agent.name}</h3>
-                                    <p className="text-xs text-gray-400">{agent.strategy}</p>
+                                    <h3 className="font-bold text-white leading-none mb-1 text-sm uppercase font-mono tracking-wider">
+                                        {agent.name}
+                                    </h3>
+                                    <p className="text-[10px] text-[#8a8a8a] uppercase tracking-wide font-mono">
+                                        STRAT: <span className="text-[#00F0FF]">{agent.strategy}</span>
+                                    </p>
                                 </div>
-                                <div className="flex items-center gap-1 text-yellow-400 text-sm">
-                                    <span>★</span>
-                                    <span>{agent.reputation}</span>
+                                <div className="text-right">
+                                    <span className="text-[10px] text-[#FCEE0A] font-mono">REP: {agent.reputation}</span>
                                 </div>
                             </div>
 
+                            {/* Deploy Button */}
                             <button
                                 onClick={() => onDeploy(agent.id)}
                                 disabled={isDeployed || deployedCount >= 6}
                                 className={`
-                  w-full py-2 rounded-lg font-semibold text-sm transition-all
-                  ${isDeployed
-                                        ? 'bg-green-500/20 text-green-400 cursor-not-allowed'
+                                    w-full py-1.5 font-bold text-xs uppercase tracking-widest transition-all clip-corner-tr
+                                    ${isDeployed
+                                        ? 'bg-[#00FF00]/10 text-[#00FF00] border border-[#00FF00]/30 cursor-not-allowed'
                                         : deployedCount >= 6
-                                            ? 'bg-gray-700/20 text-gray-500 cursor-not-allowed'
-                                            : 'bg-gradient-to-r from-cyan-500 to-purple-500 text-white hover:shadow-lg hover:shadow-cyan-500/50'
+                                            ? 'bg-gray-900 text-gray-500 border border-gray-800 cursor-not-allowed'
+                                            : 'bg-[#FCEE0A] text-black hover:bg-[#FF00FF] hover:text-white'
                                     }
-                `}
+                                `}
                             >
-                                {isDeployed ? '✓ Deployed' : 'Deploy'}
+                                {isDeployed ? '>> ACTIVE <<' : 'INITIALIZE'}
                             </button>
                         </div>
                     )
                 })}
             </div>
-
-            <div className="text-center text-sm text-gray-400 pt-3 border-t border-gray-700/50">
-                {deployedCount}/6 agents deployed
-            </div>
         </div>
     )
 }
+
+
