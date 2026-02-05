@@ -1,75 +1,139 @@
 'use client'
 
-import Link from 'next/link'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
+
+// Dynamically import 3D scene
+const LandingScene3D = dynamic(() => import('@/components/landing/LandingScene3D'), { ssr: false })
 
 export default function Home() {
   const router = useRouter()
+  const [isTransitioning, setIsTransitioning] = useState(false)
+  const [glitchText, setGlitchText] = useState('AGENTROPOLIS')
 
-  const handleTryAsGuest = () => {
-    router.push('/app?guest=true')
+  // Glitch effect on title
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (Math.random() > 0.95) {
+        // Random glitch characters
+        const glitched = 'AGENTROPOLIS'.split('').map((char) => {
+          if (Math.random() > 0.7) return String.fromCharCode(65 + Math.floor(Math.random() * 26));
+          return char;
+        }).join('');
+        setGlitchText(glitched)
+        setTimeout(() => setGlitchText('AGENTROPOLIS'), 100)
+      }
+    }, 2000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const handleLaunch = () => {
+    setIsTransitioning(true)
+    setTimeout(() => {
+      router.push('/app')
+    }, 1200)
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950 text-white">
-      <div className="flex flex-col items-center justify-center min-h-screen px-6">
-        <div className="text-center max-w-4xl">
-          <div className="mb-6 text-6xl">🏙️</div>
-          <h1 className="text-6xl md:text-7xl font-black bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 bg-clip-text text-transparent mb-6">
-            Agentropolis
-          </h1>
-          <p className="text-2xl md:text-3xl text-gray-300 mb-4 font-light">
-            Build a city of agents. Approve their plans. Execute trades on-chain.
-          </p>
-          <p className="text-lg text-gray-500 max-w-2xl mx-auto mb-12">
-            A gamified DeFi platform where AI agents propose trades in your city council. 
-            You decide what gets executed on Uniswap v4.
-          </p>
+    <main className="min-h-screen bg-[#050510] relative overflow-hidden font-[Rajdhani]">
+      {/* 3D Background */}
+      <div className="absolute inset-0 opacity-40">
+        <LandingScene3D />
+      </div>
 
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
-            <Link 
-              href="/app" 
-              className="px-8 py-4 bg-gradient-to-r from-yellow-500 to-orange-500 text-black rounded-xl hover:from-yellow-400 hover:to-orange-400 transition-all font-bold text-lg shadow-lg shadow-yellow-500/25"
-            >
-              🚀 Launch App
-            </Link>
-            <button
-              onClick={handleTryAsGuest}
-              className="px-8 py-4 bg-gray-800 text-white rounded-xl hover:bg-gray-700 transition-all font-semibold text-lg border border-gray-700"
-            >
-              👀 Try as Guest (10 min)
-            </button>
-            <Link 
-              href="/docs" 
-              className="px-8 py-4 bg-transparent text-gray-400 rounded-xl hover:text-white transition-all font-semibold text-lg border border-gray-800 hover:border-gray-600"
-            >
-              📚 Docs
-            </Link>
+      {/* Grid Overlay */}
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(252,238,10,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(252,238,10,0.05)_1px,transparent_1px)] bg-[size:50px_50px] pointer-events-none" />
+      <div className="absolute inset-0 scanline pointer-events-none" />
+
+      {/* Content Overlay */}
+      <div className={`
+        relative z-10 flex flex-col items-center justify-center min-h-screen px-6 transition-all duration-1000 ease-in-out
+        ${isTransitioning ? 'scale-150 opacity-0 blur-lg' : 'scale-100 opacity-100'}
+      `}>
+
+        {/* Main Title Block */}
+        <div className="mb-12 relative text-center">
+          <div className="border border-[#FCEE0A] p-2 inline-block mb-4 clip-corner-tr bg-black/50 backdrop-blur">
+            <span className="bg-[#FCEE0A] text-black px-4 py-1 font-bold tracking-widest text-sm uppercase">System Online</span>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8 text-left max-w-4xl mx-auto">
-            <div className="bg-gray-900/50 rounded-2xl p-6 border border-gray-800">
-              <div className="text-3xl mb-3">⚡</div>
-              <h3 className="text-xl font-bold text-yellow-400 mb-2">Yellow Network</h3>
-              <p className="text-gray-400 text-sm">Instant off-chain micro-actions with on-chain settlement. Deploy agents without gas fees.</p>
-            </div>
-            <div className="bg-gray-900/50 rounded-2xl p-6 border border-gray-800">
-              <div className="text-3xl mb-3">🤖</div>
-              <h3 className="text-xl font-bold text-blue-400 mb-2">AI Agents</h3>
-              <p className="text-gray-400 text-sm">Deploy agents from the ERC-8004 registry. They analyze markets and propose optimal trades.</p>
-            </div>
-            <div className="bg-gray-900/50 rounded-2xl p-6 border border-gray-800">
-              <div className="text-3xl mb-3">🦄</div>
-              <h3 className="text-xl font-bold text-pink-400 mb-2">Uniswap v4</h3>
-              <p className="text-gray-400 text-sm">Approved proposals execute real swaps on Uniswap v4. Full transparency with on-chain TxIDs.</p>
-            </div>
+          <h1 className="text-8xl md:text-9xl font-black text-white tracking-tighter mb-2 text-glitch select-none" data-text={glitchText}>
+            {glitchText}
+          </h1>
+
+          <div className="flex items-center justify-center gap-4 text-[#FCEE0A] tracking-[0.5em] text-sm uppercase font-bold">
+            <span>Build</span>
+            <span className="w-2 h-2 bg-[#FCEE0A] rotate-45 animate-pulse"></span>
+            <span>Command</span>
+            <span className="w-2 h-2 bg-[#FCEE0A] rotate-45 animate-pulse delay-75"></span>
+            <span>Execute</span>
           </div>
         </div>
 
-        <footer className="absolute bottom-6 text-gray-600 text-sm">
-          Built for HackMoney 2026 🏆
-        </footer>
+        {/* Description Panel */}
+        <div className="cyber-panel p-8 max-w-3xl w-full mb-12 text-center">
+          <p className="text-gray-300 text-lg leading-relaxed mb-6 font-medium tracking-wide">
+            <strong className="text-[#FCEE0A]">TACTICAL DEFI PROTOCOL:</strong> Deploy autonomous agents into the neural city grid.
+            Authorize on-chain execution via the Council.
+          </p>
+
+          <div className="flex justify-center gap-8 text-sm text-[#00F0FF] font-mono border-t border-[#FCEE0A]/20 pt-4">
+            <span className="animate-pulse"> [ STATUS: LIVE ] </span>
+            <span> [ NET: YELLOW ] </span>
+            <span> [ GAS: 0.00 ] </span>
+          </div>
+        </div>
+
+        {/* CTA Buttons */}
+        <div className="flex flex-col sm:flex-row gap-6 mb-20 z-20">
+          <button
+            onClick={handleLaunch}
+            disabled={isTransitioning}
+            className="btn-cyber w-64 h-16 text-xl clip-corner-tr"
+          >
+            INITIALIZE APP
+          </button>
+
+          <button
+            onClick={handleLaunch}
+            disabled={isTransitioning}
+            className="btn-cyber-outline w-64 h-16 text-xl clip-corner-tr"
+          >
+            GUEST ACCESS
+          </button>
+        </div>
+
+        {/* Footer Stats */}
+        <div className="absolute bottom-0 left-0 w-full border-t border-[#FCEE0A]/20 bg-black/80 backdrop-blur-md p-4">
+          <div className="container mx-auto flex justify-between items-center text-xs text-[#666] uppercase tracking-widest font-mono">
+            <div>SYS.VER.2.0.4 // AGENTROPOLIS_CORE</div>
+            <div className="flex gap-8 hidden md:flex">
+              <span><span className="text-[#FCEE0A]">ACTIVE_NODES:</span> 8,492</span>
+              <span><span className="text-[#FCEE0A]">TOTAL_VALUE:</span> $42.8M</span>
+              <span><span className="text-[#FCEE0A]">UPTIME:</span> 99.99%</span>
+            </div>
+            <div>SECURE_CONNECTION_ESTABLISHED</div>
+          </div>
+        </div>
+
       </div>
+
+      {/* Transition Overlay */}
+      {isTransitioning && (
+        <div className="fixed inset-0 bg-[#050510] z-50 flex items-center justify-center pointer-events-none">
+          <div className="text-center w-full max-w-md">
+            <div className="text-[#FCEE0A] text-4xl font-mono mb-4 animate-pulse uppercase tracking-[0.2em]">{'>'} SYSTEM_BOOT SEQUENCE</div>
+            <div className="w-full h-1 bg-[#1a1a1a] overflow-hidden">
+              <div className="h-full bg-[#FCEE0A] animate-[width_1s_ease-in-out_forwards]" style={{ width: '0%' }}></div>
+            </div>
+            <div className="flex justify-between text-[#00F0FF] text-xs font-mono mt-2">
+              <span>LOADING ASSETS...</span>
+              <span>100%</span>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
