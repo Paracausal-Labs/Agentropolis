@@ -1,0 +1,41 @@
+{
+  "version": "1.0.0",
+  "description": "Asset targets for Agentropolis Reboot",
+  "items": [
+    {
+      "id": "council_hall",
+      "type": "model",
+      "target": "generated/council-hall.glb",
+      "status": "missing",
+      "source_prompt": "Low-poly cyberpunk circular council hall, neon magenta ring lights"
+    },
+    {
+      "id": "city_buildings_pack",
+      "type": "model_set",
+      "target": "generated/city-buildings/*.glb",
+      "status": "missing",
+      "source_prompt": "Modular neon city building kit, 12 variants, low-poly"
+    },
+    {
+      "id": "agent_avatars",
+      "type": "model_set",
+      "target": "generated/agents/*.glb",
+      "status": "missing",
+      "source_prompt": "Stylized humanoid AI agent statue, glowing core"
+    },
+    {
+      "id": "road_props",
+      "type": "model_set",
+      "target": "generated/props/*.glb",
+      "status": "missing",
+      "source_prompt": "Cyberpunk street props pack"
+    },
+    {
+      "id": "surface_textures",
+      "type": "texture_set",
+      "target": "generated/textures/*.png",
+      "status": "missing",
+      "source_prompt": "Dark asphalt with neon reflections, seamless PBR maps"
+    }
+  ]
+}
