@@ -64,7 +64,7 @@ function isTokenLaunchProposal(proposal: Proposal): proposal is TokenLaunchPropo
 const PRESET_PROMPTS = [
   { label: '💰 Passive Income', prompt: 'I want passive income from my 0.1 ETH' },
   { label: '🔄 Simple Swap', prompt: 'Swap 0.05 ETH to USDC' },
-  { label: '📈 High Yield LP', prompt: 'Provide liquidity for maximum yield' },
+  { label: '📊 DCA Strategy', prompt: 'DCA 0.1 ETH into USDC over time' },
   { label: '🚀 Launch Token', prompt: 'Launch a memecoin for the lobster community' },
 ]
 
@@ -545,6 +545,7 @@ export class CouncilScene extends Phaser.Scene {
       }
 
       const agentEndpoint = typeof localStorage !== 'undefined' ? localStorage.getItem('agentEndpoint') : null
+      const walletAddress = typeof window !== 'undefined' ? (window as any).agentropolis?.walletAddress : undefined
 
       const sessionBalance = typeof window !== 'undefined' && window.agentropolis?.getBalance?.() || '0'
       const balanceDisplay = sessionBalance !== '0' ? `${sessionBalance} ytest.USD` : '0.1 ETH'
@@ -557,6 +558,7 @@ export class CouncilScene extends Phaser.Scene {
           context: { balance: balanceDisplay, riskLevel: 'medium' },
           deployedAgents: this.seats.map(s => ({ id: s.id, name: s.name })),
           ...(agentEndpoint && { agentEndpoint }),
+          ...(walletAddress && { walletAddress }),
         }),
       })
 
@@ -735,16 +737,17 @@ export class CouncilScene extends Phaser.Scene {
   private displayTradeProposal(proposal: TradeProposalUI, riskColor: number) {
     if (!this.proposalCard) return
 
-    const title = this.add.text(0, -55, `📊 Trade Proposal from ${proposal.agentName}`, {
+    const strategyLabel = proposal.strategyType === 'dca' ? 'DCA' : 'Swap'
+    const title = this.add.text(0, -55, `📊 ${strategyLabel} Proposal from ${proposal.agentName}`, {
       fontSize: '14px',
       color: '#fbbf24',
       fontFamily: 'Arial',
       fontStyle: 'bold',
     }).setOrigin(0.5)
     this.proposalCard.add(title)
-    
-    const swapText = this.add.text(0, -25, 
-      `${proposal.amountIn} ${proposal.pair.tokenIn.symbol} → ${proposal.expectedAmountOut} ${proposal.pair.tokenOut.symbol}`, {
+
+    const swapLabel = `${proposal.amountIn} ${proposal.pair.tokenIn.symbol} → ${proposal.expectedAmountOut} ${proposal.pair.tokenOut.symbol}`
+    const swapText = this.add.text(0, -25, swapLabel, {
       fontSize: '20px',
       color: '#ffffff',
       fontFamily: 'Arial',

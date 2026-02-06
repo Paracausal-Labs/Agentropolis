@@ -335,10 +335,7 @@ function detectUserIntent(userPrompt: string): { strategy: StrategyType | null; 
     return { strategy: 'swap', hint: 'User explicitly wants a SWAP. Respect this intent.' }
   }
   if (lower.includes('liquidity') || lower.includes(' lp ') || lower.includes('provide lp') || lower.includes('add lp')) {
-    if (lower.includes('concentrated') || lower.includes('tight') || lower.includes('narrow')) {
-      return { strategy: 'lp_concentrated', hint: 'User wants CONCENTRATED LP. Respect this intent.' }
-    }
-    return { strategy: 'lp_full_range', hint: 'User wants to provide LIQUIDITY. Respect this intent.' }
+    return { strategy: 'swap', hint: 'LP positions are disabled on testnet. Recommend a swap instead.' }
   }
   if (lower.includes('dca') || lower.includes('dollar cost') || lower.includes('recurring') || lower.includes('weekly')) {
     return { strategy: 'dca', hint: 'User wants DCA strategy. Respect this intent.' }
@@ -351,7 +348,8 @@ function buildAgentPrompt(
   persona: AgentPersona,
   userPrompt: string,
   context: StrategyContext,
-  previousMessages: CouncilMessage[]
+  previousMessages: CouncilMessage[],
+  deployedAgents?: Array<{ id: string; name: string }>
 ): string {
   const prevContext =
     previousMessages.length > 0
@@ -361,8 +359,12 @@ function buildAgentPrompt(
       : ''
 
   const { strategy: detectedIntent, hint } = detectUserIntent(userPrompt)
-  const intentGuidance = detectedIntent 
+  const intentGuidance = detectedIntent
     ? `\n\nIMPORTANT: ${hint} Your suggestedStrategy.type MUST be "${detectedIntent}" unless there's a critical risk.`
+    : ''
+
+  const deployedSection = deployedAgents && deployedAgents.length > 0
+    ? `\n\nDeployed Agents:\n${deployedAgents.map(a => `- ${a.name} (${a.id})`).join('\n')}`
     : ''
 
   return `${persona.systemPrompt}
@@ -381,9 +383,7 @@ Available tokens on Base Sepolia:
 Available strategies:
 - swap: Simple token exchange
 - dca: Dollar-cost averaging over time
-- lp_full_range: Provide liquidity across all prices (lower IL risk, lower fees)
-- lp_concentrated: Provide liquidity in tight range (higher fees, higher IL risk)
-${intentGuidance}
+${intentGuidance}${deployedSection}
 ${prevContext}
 
 Respond with JSON:
@@ -392,7 +392,7 @@ Respond with JSON:
   "reasoning": "Your 1-2 sentence analysis",
   "confidence": 0-100,
   "suggestedStrategy": {
-    "type": "swap" | "dca" | "lp_full_range" | "lp_concentrated",
+    "type": "swap" | "dca",
     "tokenIn": "USDC" | "WETH",
     "tokenOut": "USDC" | "WETH",
     "amountIn": "amount as string",
@@ -480,15 +480,20 @@ Respond with JSON:
 function buildClerkPrompt(
   userPrompt: string,
   context: StrategyContext,
-  messages: CouncilMessage[]
+  messages: CouncilMessage[],
+  deployedAgents?: Array<{ id: string; name: string }>
 ): string {
   const discussion = messages
     .map((m) => `${m.agentName} (${m.opinion}, ${m.confidence}% confident): ${m.reasoning}`)
     .join('\n')
 
   const { strategy: detectedIntent, hint } = detectUserIntent(userPrompt)
-  const intentGuidance = detectedIntent 
+  const intentGuidance = detectedIntent
     ? `\n\nCRITICAL: ${hint} finalStrategy MUST be "${detectedIntent}" unless Risk Sentinel issued a VETO.`
+    : ''
+
+  const deployedSection = deployedAgents && deployedAgents.length > 0
+    ? `\n\nDeployed Agents:\n${deployedAgents.map(a => `- ${a.name} (${a.id})`).join('\n')}`
     : ''
 
   return `You are the Council Clerk. Synthesize the council's discussion into a final actionable proposal.
@@ -498,7 +503,7 @@ User's request: "${userPrompt}"
 User Context:
 - Balance: ${context.balance || 'unknown'}
 - Risk tolerance: ${context.riskLevel || 'medium'}
-${intentGuidance}
+${intentGuidance}${deployedSection}
 
 Council Discussion:
 ${discussion}
@@ -509,7 +514,7 @@ IMPORTANT: Respect the user's explicitly stated strategy intent unless there's a
 
 Respond with JSON:
 {
-  "finalStrategy": "swap" | "dca" | "lp_full_range" | "lp_concentrated",
+  "finalStrategy": "swap" | "dca",
   "tokenIn": "USDC" | "WETH",
   "tokenOut": "USDC" | "WETH",
   "amountIn": "numeric value only (e.g., 0.05)",
@@ -847,7 +852,7 @@ export async function runCouncilDeliberation(
 
   for (const persona of debatingAgents) {
     try {
-      const prompt = buildAgentPrompt(persona, request.userPrompt, request.context, messages)
+      const prompt = buildAgentPrompt(persona, request.userPrompt, request.context, messages, request.deployedAgents)
       const response = await callAgent(groq, persona, prompt)
 
       messages.push({
@@ -876,7 +881,7 @@ export async function runCouncilDeliberation(
   }
 
   const clerkPersona = AGENT_PERSONAS.find((a) => a.role === 'clerk')!
-  const clerkPrompt = buildClerkPrompt(request.userPrompt, request.context, messages)
+  const clerkPrompt = buildClerkPrompt(request.userPrompt, request.context, messages, request.deployedAgents)
 
   let synthesis: ClerkSynthesis
   try {
