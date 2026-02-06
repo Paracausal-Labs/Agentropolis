@@ -96,6 +96,11 @@ const ALLOWED_API_DOMAINS = [
   'api.groq.com',
   'api.anthropic.com',
   'generativelanguage.googleapis.com',
+  'vercel.app',
+  'railway.app',
+  'fly.dev',
+  'ngrok-free.app',
+  'herokuapp.com',
 ]
 
 // SSRF Protection: Private IP ranges to block
