@@ -233,7 +233,7 @@ export function Building({ position, width, height, depth, type, onClick, isHove
                 for (let i = 0; i < 4; i++) generateFace(i)
 
                 return windows
-            }, [height, width, depth, config])}
+            }, [height, width, depth, type, config])}
 
             {/* Label for council */}
             {type === 'council' && (

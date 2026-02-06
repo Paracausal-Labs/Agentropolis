@@ -84,7 +84,8 @@ export default function CityView3D({ onEnterCouncil }: { onEnterCouncil: () => v
                 onPosUpdate={checkCoinCollection}
             />
         ))
-    }, [state.deployedAgents, coins]) // Re-render when coins change to update collection logic closure? Actually checkCoinCollection is constant if defined outside or used via ref
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [state.deployedAgents, coins])
 
     return (
         <div className="w-full h-full relative">
@@ -245,7 +246,8 @@ function WalkingAgentWrapper({ agent, onPosUpdate }: { agent: any, onPosUpdate: 
                 }
             }
         }
-    }, [target]) // Rerun when target is cleared (arrived)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [target])
 
     // Movement Loop
     useFrame((_, delta) => {
