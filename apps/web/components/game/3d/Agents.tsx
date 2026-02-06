@@ -38,13 +38,9 @@ export function Agent3D({
     const bodyRef = useRef<THREE.Mesh>(null)
     const agent = AGENT_TYPES[agentType]
 
-    if (!agent) {
-        console.error(`Agent3D: Unknown agent type "${agentType}"`)
-        return null
-    }
-
     // Walking animation
     useFrame((state) => {
+        if (!agent) return
         if (groupRef.current) {
             if (isWalking) {
                 // Bob up and down while walking
@@ -72,6 +68,7 @@ export function Agent3D({
 
     // Geometry based on shape
     const geometry = useMemo(() => {
+        if (!agent) return <capsuleGeometry args={[0.3, 1, 4, 8]} />
         const shape = agent.shape
         switch (shape) {
             case 'angular':
@@ -88,7 +85,12 @@ export function Agent3D({
             default:
                 return <capsuleGeometry args={[0.3, 1, 4, 8]} />
         }
-    }, [agent.shape])
+    }, [agent?.shape])
+
+    if (!agent) {
+        console.error(`Agent3D: Unknown agent type "${agentType}"`)
+        return null
+    }
 
     return (
         <group
@@ -246,7 +248,7 @@ export function Coin3D({ position, type = 'gold', isCollected }: { position: [nu
 export function FloatingText({ position, text, color = '#FCEE0A', onComplete }: { position: [number, number, number], text: string, color?: string, onComplete?: () => void }) {
     const ref = useRef<THREE.Group>(null)
 
-    useFrame((state) => {
+    useFrame(() => {
         if (ref.current) {
             ref.current.position.y += 0.03
         }

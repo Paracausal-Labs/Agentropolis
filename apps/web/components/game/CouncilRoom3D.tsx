@@ -293,7 +293,7 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
                                     STATUS: ONLINE
                                 </h3>
                                 <p className="text-gray-300 italic mb-8 border-l-2 border-[#FCEE0A] pl-4 text-left">
-                                    "{AGENT_TYPES[selectedAgent as keyof typeof AGENT_TYPES].catchphrase}"
+                                    {'"'}{AGENT_TYPES[selectedAgent as keyof typeof AGENT_TYPES].catchphrase}{'"'}
                                 </p>
                                 <div className="space-y-4">
                                     <button
@@ -434,7 +434,7 @@ function ProposalCard({ proposal, onResolve }: { proposal: any, onResolve: () =>
                 </div>
 
                 <div className="bg-[#222] p-4 text-gray-300 italic mb-8 border border-gray-700">
-                    "{proposal.reasoning}"
+                    {'"'}{proposal.reasoning}{'"'}
                 </div>
 
                 <div className="flex gap-4">

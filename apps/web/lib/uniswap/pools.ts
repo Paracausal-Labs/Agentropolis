@@ -1,6 +1,6 @@
 import { createPublicClient, http, type Address, keccak256, encodeAbiParameters } from 'viem'
 import { baseSepolia } from 'viem/chains'
-import { CONTRACTS, POOL_KEY, RPC_URL, TOKENS } from './constants'
+import { CONTRACTS, POOL_KEY, RPC_URL, TOKENS, HOOKS, DYNAMIC_FEE_FLAG } from './constants'
 
 const POOL_MANAGER_ABI = [
   {
@@ -176,12 +176,54 @@ export const COMMON_POOLS: PoolKey[] = [
     tickSpacing: 10,
     hooks: '0x0000000000000000000000000000000000000000' as Address,
   },
+  {
+    currency0: TOKENS.USDC as Address,
+    currency1: TOKENS.WETH as Address,
+    fee: 10000,
+    tickSpacing: 200,
+    hooks: '0x0000000000000000000000000000000000000000' as Address,
+  },
+]
+
+// Hook-enabled pools — discovered automatically after deployment
+export const HOOK_POOLS: PoolKey[] = [
+  // CouncilFeeHook: AI council controls dynamic fees
+  ...(HOOKS.COUNCIL_FEE !== '0x0000000000000000000000000000000000000000'
+    ? [{
+        currency0: TOKENS.USDC as Address,
+        currency1: TOKENS.WETH as Address,
+        fee: DYNAMIC_FEE_FLAG,
+        tickSpacing: 60,
+        hooks: HOOKS.COUNCIL_FEE as Address,
+      }]
+    : []),
+  // SwapGuardHook: Risk Sentinel controls max swap size
+  ...(HOOKS.SWAP_GUARD !== '0x0000000000000000000000000000000000000000'
+    ? [{
+        currency0: TOKENS.USDC as Address,
+        currency1: TOKENS.WETH as Address,
+        fee: 3000,
+        tickSpacing: 60,
+        hooks: HOOKS.SWAP_GUARD as Address,
+      }]
+    : []),
+  // SentimentOracleHook: records council sentiment on-chain
+  ...(HOOKS.SENTIMENT_ORACLE !== '0x0000000000000000000000000000000000000000'
+    ? [{
+        currency0: TOKENS.USDC as Address,
+        currency1: TOKENS.WETH as Address,
+        fee: 3000,
+        tickSpacing: 60,
+        hooks: HOOKS.SENTIMENT_ORACLE as Address,
+      }]
+    : []),
 ]
 
 export const discoverPools = async (): Promise<PoolInfo[]> => {
   const results: PoolInfo[] = []
+  const allPools = [...COMMON_POOLS, ...HOOK_POOLS]
 
-  for (const poolKey of COMMON_POOLS) {
+  for (const poolKey of allPools) {
     const info = await getPoolInfo(poolKey)
     if (info.isInitialized) {
       results.push(info)

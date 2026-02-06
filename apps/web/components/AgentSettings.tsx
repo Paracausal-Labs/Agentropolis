@@ -24,6 +24,8 @@ function SettingsModal({ isOpen, onClose }: AgentSettingsProps) {
   useEffect(() => {
     if (config?.agentEndpoint) {
       setEndpoint(config.agentEndpoint)
+      // Sync ENS endpoint to localStorage for CouncilScene direct read
+      localStorage.setItem('agentEndpoint', config.agentEndpoint)
     }
   }, [config?.agentEndpoint])
 
@@ -43,6 +45,12 @@ function SettingsModal({ isOpen, onClose }: AgentSettingsProps) {
 
     try {
       await writeAgentConfig(ensName, { agentEndpoint: endpoint || undefined }, walletClient)
+      // Sync to localStorage so CouncilScene can read it immediately
+      if (endpoint) {
+        localStorage.setItem('agentEndpoint', endpoint)
+      } else {
+        localStorage.removeItem('agentEndpoint')
+      }
       setSaveStatus('success')
       setTimeout(() => setSaveStatus('idle'), 3000)
     } catch (err) {

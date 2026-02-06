@@ -2,14 +2,17 @@
 
 import { useState } from 'react'
 import dynamic from 'next/dynamic'
+import { ConnectButton } from '@/components/ConnectButton'
+import { SessionStatus } from '@/components/SessionProvider'
+import { SwapHandler } from '@/components/SwapHandler'
+import { GuestMode } from '@/components/GuestMode'
+import { useGame } from '@/contexts/GameContext'
 
 // Dynamically import 3D components (client-side only)
 const CityView3D = dynamic(() => import('./game/CityView3D'), { ssr: false })
 const CouncilRoom3D = dynamic(() => import('./game/CouncilRoom3D'), { ssr: false })
 
 type GameScene = 'city' | 'council'
-
-import { useGame } from '@/contexts/GameContext'
 
 export function AppPageContent() {
   const { state } = useGame()
@@ -42,14 +45,17 @@ export function AppPageContent() {
               </h1>
               <div className="flex gap-2 text-[10px] text-[#00F0FF] font-mono mt-1">
                 <span>SYS: ONLINE</span>
-                <span>//</span>
+                <span>{'//'}</span>
                 <span>PING: 12ms</span>
               </div>
             </div>
           </div>
 
           {/* Right Module - Status */}
-          <div className="flex gap-4">
+          <div className="flex gap-4 items-center">
+            {/* Yellow Session Status */}
+            <SessionStatus />
+            
             {/* Live Status */}
             <div className="cyber-panel px-4 py-2 flex flex-col items-center justify-center min-w-[80px]">
               <span className="text-[10px] text-gray-400 uppercase tracking-wider">Status</span>
@@ -65,10 +71,8 @@ export function AppPageContent() {
               <span className="text-xl font-mono text-white tracking-wide">{state.ytestBalance.toFixed(3)} <span className="text-gray-500 text-sm">YES</span></span>
             </div>
 
-            {/* Connect */}
-            <button className="btn-cyber-outline hover:bg-[#FCEE0A] hover:text-black py-2 h-auto text-sm clip-corner-tr pointer-events-auto">
-              CONNECT_WALLET
-            </button>
+            {/* Connect Button */}
+            <ConnectButton />
           </div>
         </div>
       </header>
@@ -142,6 +146,9 @@ export function AppPageContent() {
         </div>
       </div>
 
+      {/* Functional Components */}
+      <SwapHandler />
+      <GuestMode />
     </div>
   )
 }

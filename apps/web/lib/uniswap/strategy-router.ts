@@ -1,8 +1,7 @@
 import { useCallback } from 'react'
 import { useWalletClient } from 'wagmi'
-import type { TradeProposal, StrategyType } from '@agentropolis/shared'
+import type { TradeProposal, StrategyType, ExecutionPlan, SwapReceipt } from '@agentropolis/shared'
 import { executeSwap, useSwapExecutor } from './executor'
-import { addLiquidity, useLPExecutor } from './lp-executor'
 import type { WalletClient } from 'viem'
 
 export interface ExecutionResult {
@@ -10,7 +9,10 @@ export interface ExecutionResult {
   txHash?: string
   positionId?: string
   error?: string
+  warning?: string
   strategyType: StrategyType
+  executionPlan?: ExecutionPlan
+  receipt?: SwapReceipt
 }
 
 const isLPStrategy = (strategyType?: StrategyType): boolean => {
@@ -25,22 +27,22 @@ export const executeProposal = async (
 
   try {
     if (isLPStrategy(proposal.strategyType)) {
-      console.info('[strategy-router] Executing LP strategy:', strategyType)
-      const result = await addLiquidity(proposal, walletClient)
-      return {
-        success: true,
-        txHash: result.txHash,
-        positionId: result.positionId,
-        strategyType,
-      }
+      throw new Error('LP positions disabled on testnet — use swap or DCA')
     }
 
+    const isDCA = strategyType === 'dca'
+    if (isDCA) {
+      console.warn('[strategy-router] DCA not fully implemented - executing as single swap')
+    }
     console.info('[strategy-router] Executing swap strategy:', strategyType)
     const result = await executeSwap(proposal, walletClient)
     return {
       success: true,
       txHash: result.txHash,
       strategyType,
+      executionPlan: result.executionPlan,
+      receipt: result.receipt,
+      ...(isDCA && { warning: 'DCA executed as single swap (scheduling not yet implemented)' }),
     }
   } catch (err) {
     console.error('[strategy-router] Execution failed:', err)
@@ -55,7 +57,6 @@ export const executeProposal = async (
 export const useStrategyExecutor = () => {
   const { data: walletClient } = useWalletClient()
   const { executeSwap: swapExecute } = useSwapExecutor()
-  const { addLiquidity: lpExecute } = useLPExecutor()
 
   const execute = useCallback(
     async (proposal: TradeProposal): Promise<ExecutionResult> => {
@@ -63,20 +64,21 @@ export const useStrategyExecutor = () => {
 
       try {
         if (isLPStrategy(proposal.strategyType)) {
-          const result = await lpExecute(proposal)
-          return {
-            success: true,
-            txHash: result.txHash,
-            positionId: result.positionId,
-            strategyType,
-          }
+          throw new Error('LP positions disabled on testnet — use swap or DCA')
         }
 
+        const isDCA = strategyType === 'dca'
+        if (isDCA) {
+          console.warn('[strategy-router] DCA not fully implemented - executing as single swap')
+        }
         const result = await swapExecute(proposal)
         return {
           success: true,
           txHash: result.txHash,
           strategyType,
+          executionPlan: result.executionPlan,
+          receipt: result.receipt,
+          ...(isDCA && { warning: 'DCA executed as single swap (scheduling not yet implemented)' }),
         }
       } catch (err) {
         return {
@@ -86,7 +88,7 @@ export const useStrategyExecutor = () => {
         }
       }
     },
-    [swapExecute, lpExecute]
+    [swapExecute]
   )
 
   return { execute, walletClient, isLPStrategy }
@@ -99,9 +101,9 @@ export const getStrategyDescription = (strategyType?: StrategyType): string => {
     case 'dca':
       return 'Dollar-cost averaging (multiple swaps over time)'
     case 'lp_full_range':
-      return 'Full-range liquidity (lower fees, lower IL risk)'
+      return 'Full-range liquidity (disabled on testnet)'
     case 'lp_concentrated':
-      return 'Concentrated liquidity (higher fees, higher IL risk)'
+      return 'Concentrated liquidity (disabled on testnet)'
     default:
       return 'Unknown strategy'
   }

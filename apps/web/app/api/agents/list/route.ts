@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAgents } from '@/lib/erc8004'
 import type { AgentProfile } from '@agentropolis/shared'
 
+export const dynamic = 'force-dynamic'
+
 interface CacheEntry {
   data: AgentProfile[]
   timestamp: number
@@ -72,7 +74,8 @@ async function getFallbackAgents(limit: number): Promise<NextResponse> {
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
-    const limit = Math.min(parseInt(searchParams.get('limit') || '10'), 50)
+    const parsedLimit = parseInt(searchParams.get('limit') || '10', 10)
+    const limit = Math.min(Number.isNaN(parsedLimit) ? 10 : parsedLimit, 50)
     const mockParam = searchParams.get('mock')
     const mockMode =
       mockParam !== null ? mockParam === 'true' : process.env.ERC8004_MOCK === 'true'
@@ -84,7 +87,8 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('[API] Error fetching agents:', error)
     try {
-      const limit = Math.min(parseInt(new URL(request.url).searchParams.get('limit') || '10'), 50)
+      const parsedLimit = parseInt(new URL(request.url).searchParams.get('limit') || '10')
+      const limit = Math.min(Number.isNaN(parsedLimit) ? 10 : parsedLimit, 50)
       return await getFallbackAgents(limit)
     } catch (fallbackError) {
       console.error('[API] Fallback to mock agents failed:', fallbackError)

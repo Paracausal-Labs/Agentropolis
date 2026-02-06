@@ -10,14 +10,15 @@
     "type-check": "tsc --noEmit",
     "demo:agent": "MOCK_MODE=true bun run scripts/demo-x402-server.ts",
     "demo:agent:x402": "bun run scripts/demo-x402-server.ts",
-    "test:e2e": "bun run scripts/test-x402-erc8004.ts"
+    "test:e2e": "bun run scripts/test-x402-erc8004.ts",
+    "init:pool": "bun run scripts/init-pool.ts"
   },
   "dependencies": {
     "@agentropolis/shared": "workspace:*",
     "@erc7824/nitrolite": "^0.5.3",
     "@metamask/sdk": "^0.34.0",
-    "@react-three/drei": "^9.117.3",
-    "@react-three/fiber": "^8.17.12",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.5.0",
     "@react-three/postprocessing": "^2.16.3",
     "@safe-global/safe-apps-provider": "^0.18.6",
     "@safe-global/safe-apps-sdk": "^9.1.0",
@@ -48,7 +49,7 @@
     "sonner": "^2.0.7",
     "tailwind-merge": "^2.2.0",
     "tailwindcss": "^3.3.0",
-    "three": "^0.171.0",
+    "three": "^0.182.0",
     "viem": "^2.45.1",
     "wagmi": "^3.4.1",
     "ws": "^8.19.0"
@@ -57,7 +58,7 @@
     "@types/node": "^20.10.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
-    "@types/three": "^0.171.0",
+    "@types/three": "^0.182.0",
     "@types/ws": "^8.18.1",
     "autoprefixer": "^10.4.16",
     "eslint": "^8.55.0",

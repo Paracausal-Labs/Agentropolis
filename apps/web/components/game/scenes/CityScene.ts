@@ -1,4 +1,4 @@
-import Phaser from 'phaser'
+import * as Phaser from 'phaser'
 
 const TILE_WIDTH = 64
 const TILE_HEIGHT = 32
@@ -93,6 +93,8 @@ export class CityScene extends Phaser.Scene {
 
   private loadAgentsFromStorage() {
     if (typeof window === 'undefined') return
+    
+    this.deployedAgents = []
     
     try {
       const stored = localStorage.getItem(STORAGE_KEY)
@@ -375,7 +377,7 @@ export class CityScene extends Phaser.Scene {
 
   private createDeployButton() {
     const x = this.cameras.main.width - 120
-    const y = 60
+    const y = 100 // Below header height (~68px)
     
     this.deployButton = this.add.container(x, y)
     
@@ -419,7 +421,7 @@ export class CityScene extends Phaser.Scene {
     const panelWidth = 250
     const panelHeight = 300
     const x = this.cameras.main.width - panelWidth / 2 - 20
-    const y = 200
+    const y = 240
     
     this.agentPanel = this.add.container(x, y)
     this.agentPanel.setVisible(false)

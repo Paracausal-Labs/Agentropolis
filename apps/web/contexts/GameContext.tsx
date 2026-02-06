@@ -22,11 +22,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const [state, setState] = useState<MockGameState>(gameStore.getState())
 
     useEffect(() => {
-        // Subscribe to store updates
         const unsubscribe = gameStore.subscribe(() => {
             setState(gameStore.getState())
         })
-        return unsubscribe
+        return () => { unsubscribe() }
     }, [])
 
     const actions = {

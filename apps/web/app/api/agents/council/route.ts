@@ -1,5 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { runCouncilDeliberation, runTokenLaunchDeliberation, isTokenLaunchPrompt, type CouncilRequest } from '@/lib/agents/council'
+import { createPublicClient, http } from 'viem'
+import { sepolia } from 'viem/chains'
+import { normalize } from 'viem/ens'
+import {
+  runCouncilDeliberation,
+  runTokenLaunchDeliberation,
+  isTokenLaunchPrompt,
+  extractHookParameters,
+  updateHookParameters,
+  type CouncilRequest,
+} from '@/lib/agents/council'
 
 const RATE_LIMIT_WINDOW_MS = 60_000
 const RATE_LIMIT_MAX_REQUESTS = 5 // Lower limit for council (more expensive)
@@ -89,19 +99,45 @@ async function handleDeliberation(request: NextRequest): Promise<NextResponse> {
     }
 
     const walletAddress = body.walletAddress || '0x0000000000000000000000000000000000000000'
-    
-    if (body.agentEndpoint) {
-      console.log('[API] External agent endpoint configured:', body.agentEndpoint)
+
+    // ENS endpoint fallback: if no agentEndpoint but walletAddress provided, try ENS lookup
+    if (!councilRequest.agentEndpoint && body.walletAddress) {
+      try {
+        const ensClient = createPublicClient({ chain: sepolia, transport: http() })
+        const ensName = await ensClient.getEnsName({ address: body.walletAddress as `0x${string}` })
+        if (ensName) {
+          const endpoint = await ensClient.getEnsText({
+            name: normalize(ensName),
+            key: 'com.agentropolis.endpoint',
+          })
+          if (endpoint) {
+            console.log(`[API] Resolved ENS endpoint for ${ensName}: ${endpoint}`)
+            councilRequest.agentEndpoint = endpoint
+          }
+        }
+      } catch (err) {
+        console.warn('[API] ENS lookup failed:', err)
+      }
+    }
+
+    if (councilRequest.agentEndpoint) {
+      console.log('[API] External agent endpoint configured:', councilRequest.agentEndpoint)
     }
     
     const result = isTokenLaunchPrompt(userPrompt)
       ? await runTokenLaunchDeliberation(councilRequest, walletAddress)
       : await runCouncilDeliberation(councilRequest)
 
+    // Fire-and-forget: push council decisions to V4 hooks on-chain
+    const riskLevel = (councilRequest.context.riskLevel ?? 'medium') as 'low' | 'medium' | 'high'
+    const hookParams = extractHookParameters(result.deliberation, riskLevel)
+    updateHookParameters(hookParams).catch(() => {})
+
     return NextResponse.json({
       success: true,
       deliberation: result.deliberation,
       proposal: result.proposal,
+      hookParameters: hookParams,
     })
   } catch (error) {
     console.error('[API] Council deliberation error:', error)

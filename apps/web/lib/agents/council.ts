@@ -88,12 +88,90 @@ export interface CouncilRequest {
   agentEndpoint?: string
 }
 
+// SSRF Protection: Allowed external API domains
+const ALLOWED_API_DOMAINS = [
+  'localhost',
+  '127.0.0.1',
+  'api.openai.com',
+  'api.groq.com',
+  'api.anthropic.com',
+  'generativelanguage.googleapis.com',
+  'vercel.app',
+  'railway.app',
+  'fly.dev',
+  'ngrok-free.app',
+  'herokuapp.com',
+]
+
+// SSRF Protection: Private IP ranges to block
+const PRIVATE_IP_PATTERNS = [
+  /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/,          // 10.0.0.0/8
+  /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/, // 172.16.0.0/12
+  /^192\.168\.\d{1,3}\.\d{1,3}$/,             // 192.168.0.0/16
+  /^169\.254\.\d{1,3}\.\d{1,3}$/,             // 169.254.0.0/16 (link-local)
+  /^0\.0\.0\.0$/,                              // 0.0.0.0
+]
+
+const EXTERNAL_AGENT_TIMEOUT_MS = 10_000 // 10 seconds
+const MAX_RESPONSE_SIZE_BYTES = 1024 * 1024 // 1MB
+
+function validateExternalEndpoint(endpoint: string): { valid: boolean; error?: string } {
+  let url: URL
+  try {
+    url = new URL(endpoint)
+  } catch {
+    return { valid: false, error: 'Invalid URL format' }
+  }
+
+  const hostname = url.hostname.toLowerCase()
+  
+  // Check if hostname is a private IP
+  for (const pattern of PRIVATE_IP_PATTERNS) {
+    if (pattern.test(hostname)) {
+      return { valid: false, error: 'Private IP addresses are not allowed' }
+    }
+  }
+
+  // Allow localhost without HTTPS requirement
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return { valid: true }
+  }
+
+  // For external hosts, require HTTPS
+  if (url.protocol !== 'https:') {
+    return { valid: false, error: 'HTTPS required for external endpoints' }
+  }
+
+  // Check allowlist
+  const isAllowed = ALLOWED_API_DOMAINS.some(domain => 
+    hostname === domain || hostname.endsWith('.' + domain)
+  )
+  
+  if (!isAllowed) {
+    return { valid: false, error: `Domain not in allowlist: ${hostname}` }
+  }
+
+  return { valid: true }
+}
+
 async function callExternalAgent(
   endpoint: string,
   request: ExternalAgentRequest,
   x402Fetch?: typeof fetch
 ): Promise<ExternalAgentResponse> {
+  // Validate endpoint before making request (SSRF protection)
+  const validation = validateExternalEndpoint(endpoint)
+  if (!validation.valid) {
+    console.error('[Council] SSRF blocked:', validation.error)
+    return { 
+      success: false, 
+      error: `Endpoint blocked: ${validation.error}` 
+    }
+  }
+
   const fetcher = x402Fetch || fetch
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), EXTERNAL_AGENT_TIMEOUT_MS)
   
   try {
     console.log('[Council] Calling external agent:', endpoint)
@@ -102,13 +180,28 @@ async function callExternalAgent(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
+      signal: controller.signal,
     })
+
+    clearTimeout(timeoutId)
 
     if (!response.ok) {
       throw new Error(`External agent error: ${response.status}`)
     }
 
-    const data = await response.json()
+    // Check Content-Length header if available
+    const contentLength = response.headers.get('Content-Length')
+    if (contentLength && parseInt(contentLength, 10) > MAX_RESPONSE_SIZE_BYTES) {
+      throw new Error(`Response too large: ${contentLength} bytes (max ${MAX_RESPONSE_SIZE_BYTES})`)
+    }
+
+    // Read response with size limit
+    const text = await response.text()
+    if (text.length > MAX_RESPONSE_SIZE_BYTES) {
+      throw new Error(`Response too large: ${text.length} bytes (max ${MAX_RESPONSE_SIZE_BYTES})`)
+    }
+
+    const data = JSON.parse(text)
     console.log('[Council] External agent response received')
     
     const paymentTx = response.headers.get('X-Payment-Response')
@@ -119,6 +212,13 @@ async function callExternalAgent(
 
     return data as ExternalAgentResponse
   } catch (error) {
+    clearTimeout(timeoutId)
+    
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('[Council] External agent timeout after', EXTERNAL_AGENT_TIMEOUT_MS, 'ms')
+      return { success: false, error: 'Request timeout' }
+    }
+    
     console.error('[Council] External agent failed:', error)
     return { 
       success: false, 
@@ -127,17 +227,44 @@ async function callExternalAgent(
   }
 }
 
+function isTradeProposal(proposal: TradeProposal | TokenLaunchProposal): proposal is TradeProposal {
+  return proposal.strategyType !== 'token_launch' && 'pair' in proposal
+}
+
 function convertExternalProposal(
   proposal: TradeProposal | TokenLaunchProposal,
   messages: CouncilMessage[]
 ): { deliberation: DeliberationResult; proposal: TradeProposal } {
   const { consensus, voteTally } = calculateConsensus(messages)
   
-  const tradeProposal = proposal as TradeProposal
+  if (!isTradeProposal(proposal)) {
+    console.error('[Council] External agent returned token launch proposal, converting to swap')
+    const fallbackProposal: TradeProposal = {
+      id: `external-${Date.now()}`,
+      agentId: 'external',
+      agentName: 'External Agent',
+      pair: {
+        tokenIn: { symbol: 'USDC', address: TOKENS.USDC },
+        tokenOut: { symbol: 'WETH', address: TOKENS.WETH },
+      },
+      action: 'swap',
+      strategyType: 'swap',
+      amountIn: '10',
+      expectedAmountOut: '0.003',
+      maxSlippage: 50,
+      deadline: Date.now() + 3600000,
+      reasoning: 'Fallback proposal from external agent',
+      confidence: 50,
+      riskLevel: 'medium',
+      deliberation: { messages, consensus, voteTally, rounds: 1 },
+    }
+    return { deliberation: { messages, consensus, voteTally, rounds: 1 }, proposal: fallbackProposal }
+  }
+  
   return {
     deliberation: { messages, consensus, voteTally, rounds: 1 },
     proposal: {
-      ...tradeProposal,
+      ...proposal,
       deliberation: { messages, consensus, voteTally, rounds: 1 },
     },
   }
@@ -213,10 +340,7 @@ function detectUserIntent(userPrompt: string): { strategy: StrategyType | null; 
     return { strategy: 'swap', hint: 'User explicitly wants a SWAP. Respect this intent.' }
   }
   if (lower.includes('liquidity') || lower.includes(' lp ') || lower.includes('provide lp') || lower.includes('add lp')) {
-    if (lower.includes('concentrated') || lower.includes('tight') || lower.includes('narrow')) {
-      return { strategy: 'lp_concentrated', hint: 'User wants CONCENTRATED LP. Respect this intent.' }
-    }
-    return { strategy: 'lp_full_range', hint: 'User wants to provide LIQUIDITY. Respect this intent.' }
+    return { strategy: 'swap', hint: 'LP positions are disabled on testnet. Recommend a swap instead.' }
   }
   if (lower.includes('dca') || lower.includes('dollar cost') || lower.includes('recurring') || lower.includes('weekly')) {
     return { strategy: 'dca', hint: 'User wants DCA strategy. Respect this intent.' }
@@ -229,7 +353,8 @@ function buildAgentPrompt(
   persona: AgentPersona,
   userPrompt: string,
   context: StrategyContext,
-  previousMessages: CouncilMessage[]
+  previousMessages: CouncilMessage[],
+  deployedAgents?: Array<{ id: string; name: string }>
 ): string {
   const prevContext =
     previousMessages.length > 0
@@ -239,8 +364,12 @@ function buildAgentPrompt(
       : ''
 
   const { strategy: detectedIntent, hint } = detectUserIntent(userPrompt)
-  const intentGuidance = detectedIntent 
+  const intentGuidance = detectedIntent
     ? `\n\nIMPORTANT: ${hint} Your suggestedStrategy.type MUST be "${detectedIntent}" unless there's a critical risk.`
+    : ''
+
+  const deployedSection = deployedAgents && deployedAgents.length > 0
+    ? `\n\nDeployed Agents:\n${deployedAgents.map(a => `- ${a.name} (${a.id})`).join('\n')}`
     : ''
 
   return `${persona.systemPrompt}
@@ -259,9 +388,7 @@ Available tokens on Base Sepolia:
 Available strategies:
 - swap: Simple token exchange
 - dca: Dollar-cost averaging over time
-- lp_full_range: Provide liquidity across all prices (lower IL risk, lower fees)
-- lp_concentrated: Provide liquidity in tight range (higher fees, higher IL risk)
-${intentGuidance}
+${intentGuidance}${deployedSection}
 ${prevContext}
 
 Respond with JSON:
@@ -270,7 +397,7 @@ Respond with JSON:
   "reasoning": "Your 1-2 sentence analysis",
   "confidence": 0-100,
   "suggestedStrategy": {
-    "type": "swap" | "dca" | "lp_full_range" | "lp_concentrated",
+    "type": "swap" | "dca",
     "tokenIn": "USDC" | "WETH",
     "tokenOut": "USDC" | "WETH",
     "amountIn": "amount as string",
@@ -358,15 +485,20 @@ Respond with JSON:
 function buildClerkPrompt(
   userPrompt: string,
   context: StrategyContext,
-  messages: CouncilMessage[]
+  messages: CouncilMessage[],
+  deployedAgents?: Array<{ id: string; name: string }>
 ): string {
   const discussion = messages
     .map((m) => `${m.agentName} (${m.opinion}, ${m.confidence}% confident): ${m.reasoning}`)
     .join('\n')
 
   const { strategy: detectedIntent, hint } = detectUserIntent(userPrompt)
-  const intentGuidance = detectedIntent 
+  const intentGuidance = detectedIntent
     ? `\n\nCRITICAL: ${hint} finalStrategy MUST be "${detectedIntent}" unless Risk Sentinel issued a VETO.`
+    : ''
+
+  const deployedSection = deployedAgents && deployedAgents.length > 0
+    ? `\n\nDeployed Agents:\n${deployedAgents.map(a => `- ${a.name} (${a.id})`).join('\n')}`
     : ''
 
   return `You are the Council Clerk. Synthesize the council's discussion into a final actionable proposal.
@@ -376,7 +508,7 @@ User's request: "${userPrompt}"
 User Context:
 - Balance: ${context.balance || 'unknown'}
 - Risk tolerance: ${context.riskLevel || 'medium'}
-${intentGuidance}
+${intentGuidance}${deployedSection}
 
 Council Discussion:
 ${discussion}
@@ -387,11 +519,11 @@ IMPORTANT: Respect the user's explicitly stated strategy intent unless there's a
 
 Respond with JSON:
 {
-  "finalStrategy": "swap" | "dca" | "lp_full_range" | "lp_concentrated",
+  "finalStrategy": "swap" | "dca",
   "tokenIn": "USDC" | "WETH",
   "tokenOut": "USDC" | "WETH",
-  "amountIn": "realistic amount based on user's balance",
-  "expectedAmountOut": "expected output or APY",
+  "amountIn": "numeric value only (e.g., 0.05)",
+  "expectedAmountOut": "numeric value only (e.g., 165) - NO text, NO units, just the number",
   "maxSlippage": 50,
   "reasoning": "2-3 sentence summary of why this is recommended, noting any dissent",
   "confidence": 0-100,
@@ -620,7 +752,7 @@ function getMockDeliberation(userPrompt: string): {
     tokenIn: 'WETH',
     tokenOut: 'USDC',
     amountIn: '0.05',
-    expectedAmountOut: userPrompt.toLowerCase().includes('income') ? '~15% APY' : '165',
+    expectedAmountOut: '165',
     maxSlippage: 50,
     reasoning:
       'Council recommends full-range LP for passive income with lower IL risk. Risk Sentinel noted moderate concerns, but Alpha Hunter and Macro Oracle see favorable conditions. Devil\'s Advocate reminder: have an exit plan.',
@@ -725,7 +857,7 @@ export async function runCouncilDeliberation(
 
   for (const persona of debatingAgents) {
     try {
-      const prompt = buildAgentPrompt(persona, request.userPrompt, request.context, messages)
+      const prompt = buildAgentPrompt(persona, request.userPrompt, request.context, messages, request.deployedAgents)
       const response = await callAgent(groq, persona, prompt)
 
       messages.push({
@@ -754,7 +886,7 @@ export async function runCouncilDeliberation(
   }
 
   const clerkPersona = AGENT_PERSONAS.find((a) => a.role === 'clerk')!
-  const clerkPrompt = buildClerkPrompt(request.userPrompt, request.context, messages)
+  const clerkPrompt = buildClerkPrompt(request.userPrompt, request.context, messages, request.deployedAgents)
 
   let synthesis: ClerkSynthesis
   try {
@@ -928,6 +1060,95 @@ export async function runTokenLaunchDeliberation(
 
   console.log(`[Council] Token launch deliberation complete: ${consensus}`)
   return { deliberation: { messages, consensus, voteTally, rounds: 1 }, proposal }
+}
+
+// ─── V4 Hook Integration ───
+
+export interface HookParameters {
+  feeBps: number
+  maxSwapSize: string
+  sentimentScore: number
+  sentimentReason: string
+}
+
+/**
+ * Extract hook parameters from a council deliberation result.
+ * Maps council consensus → on-chain hook parameters:
+ *   - Fee: higher when risk is high, lower when council is bullish
+ *   - MaxSwapSize: tighter when risk is elevated
+ *   - Sentiment: derived from consensus and confidence
+ */
+export function extractHookParameters(
+  deliberation: DeliberationResult,
+  riskLevel: 'low' | 'medium' | 'high'
+): HookParameters {
+  const { consensus, voteTally } = deliberation
+
+  // Fee: scale based on risk + consensus
+  let feeBps = 3000 // default 0.3%
+  if (riskLevel === 'high' || consensus === 'vetoed') {
+    feeBps = 10000 // 1% — discourage swaps in risky conditions
+  } else if (riskLevel === 'low' && consensus === 'unanimous') {
+    feeBps = 500 // 0.05% — encourage swaps when council is confident
+  } else if (consensus === 'contested') {
+    feeBps = 5000 // 0.5% — moderate caution
+  }
+
+  // MaxSwapSize: tighter guardrails when risk is elevated
+  let maxSwapSize: string
+  if (riskLevel === 'high' || consensus === 'vetoed') {
+    maxSwapSize = '1000000000000000000' // 1 ETH
+  } else if (riskLevel === 'medium') {
+    maxSwapSize = '10000000000000000000' // 10 ETH
+  } else {
+    maxSwapSize = '100000000000000000000' // 100 ETH
+  }
+
+  // Sentiment: -100 to +100 derived from vote tally
+  const total = voteTally.support + voteTally.oppose + voteTally.abstain
+  const sentimentScore = total > 0
+    ? Math.round(((voteTally.support - voteTally.oppose) / total) * 100)
+    : 0
+
+  // Build reason from consensus
+  const sentimentReason = `Council ${consensus}: ${voteTally.support}S/${voteTally.oppose}O/${voteTally.abstain}A, risk=${riskLevel}`
+
+  return { feeBps, maxSwapSize, sentimentScore, sentimentReason }
+}
+
+/**
+ * Push hook parameters to chain via the /api/hooks/update endpoint.
+ * Called after council deliberation completes.
+ */
+export async function updateHookParameters(params: HookParameters): Promise<void> {
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+    const res = await fetch(`${baseUrl}/api/hooks/update`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-hook-auth': process.env.HOOK_AUTH_SECRET ?? '',
+      },
+      body: JSON.stringify({
+        feeBps: params.feeBps,
+        maxSwapSize: params.maxSwapSize,
+        sentimentScore: params.sentimentScore,
+        sentimentReason: params.sentimentReason,
+      }),
+    })
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      console.error('[Council→Hooks] Update failed:', err)
+      return
+    }
+
+    const result = await res.json()
+    console.log('[Council→Hooks] Parameters updated on-chain:', result)
+  } catch (err) {
+    // Non-fatal: hooks update is best-effort, don't block deliberation
+    console.error('[Council→Hooks] Failed to update hook parameters:', err)
+  }
 }
 
 export { AGENT_PERSONAS, isTokenLaunchPrompt }

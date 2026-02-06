@@ -17,7 +17,7 @@ export default function Home() {
     const interval = setInterval(() => {
       if (Math.random() > 0.95) {
         // Random glitch characters
-        const glitched = 'AGENTROPOLIS'.split('').map((char, index) => {
+        const glitched = 'AGENTROPOLIS'.split('').map((char) => {
           if (Math.random() > 0.7) return String.fromCharCode(65 + Math.floor(Math.random() * 26));
           return char;
         }).join('');

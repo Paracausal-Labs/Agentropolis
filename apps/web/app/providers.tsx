@@ -2,18 +2,10 @@
 
 import { ThemeProvider } from 'next-themes'
 import { Toaster } from 'sonner'
-import { createConfig, http, WagmiProvider } from 'wagmi'
-import { mainnet, sepolia } from 'wagmi/chains'
+import { WagmiProvider } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState } from 'react'
-
-const config = createConfig({
-    chains: [mainnet, sepolia],
-    transports: {
-        [mainnet.id]: http(),
-        [sepolia.id]: http(),
-    },
-})
+import { config } from '@/lib/wagmi'
 
 export function Providers({ children }: { children: React.ReactNode }) {
     const [queryClient] = useState(() => new QueryClient())
