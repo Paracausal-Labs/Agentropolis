@@ -12,15 +12,33 @@ import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 /// @notice Records the council's latest market sentiment as an on-chain oracle after each swap.
 contract SentimentOracleHook is BaseHook {
     address public owner;
+    address public pendingOwner;
     int8 public sentiment; // -100 to +100
     string public sentimentReason;
     uint256 public swapCount;
     uint256 public lastUpdated;
 
     event SentimentUpdated(int8 score, string reason, uint256 timestamp);
+    event OwnershipTransferInitiated(address indexed currentOwner, address indexed pendingOwner);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     constructor(IPoolManager _pm, address _owner) BaseHook(_pm) {
         owner = _owner;
+    }
+
+    function transferOwnership(address newOwner) external {
+        require(msg.sender == owner, "not owner");
+        require(newOwner != address(0), "zero address");
+        pendingOwner = newOwner;
+        emit OwnershipTransferInitiated(owner, newOwner);
+    }
+
+    function acceptOwnership() external {
+        require(msg.sender == pendingOwner, "not pending owner");
+        address oldOwner = owner;
+        owner = pendingOwner;
+        pendingOwner = address(0);
+        emit OwnershipTransferred(oldOwner, owner);
     }
 
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
@@ -46,6 +64,7 @@ contract SentimentOracleHook is BaseHook {
     function updateSentiment(int8 _score, string calldata _reason) external {
         require(msg.sender == owner, "not owner");
         require(_score >= -100 && _score <= 100, "score out of range");
+        require(bytes(_reason).length <= 500, "reason too long");
         sentiment = _score;
         sentimentReason = _reason;
         lastUpdated = block.timestamp;

@@ -58,13 +58,12 @@ contract CouncilFeeHookTest is Test, Deployers {
         hook = CouncilFeeHook(hookAddr);
 
         // Storage layout (immutables are in bytecode, not storage):
-        // slot 0: owner (address, 20 bytes) | currentFeeBps (uint24, 3 bytes) — packed
-        // Pack owner + currentFeeBps into slot 0
-        vm.store(
-            hookAddr,
-            bytes32(uint256(0)),
-            bytes32(uint256(uint160(owner)) | (uint256(3000) << 160))
-        );
+        // slot 0: owner (address, 20 bytes)
+        // slot 1: pendingOwner (address, 20 bytes) | currentFeeBps (uint24, 3 bytes) — packed
+        // Set owner in slot 0
+        vm.store(hookAddr, bytes32(uint256(0)), bytes32(uint256(uint160(owner))));
+        // Pack pendingOwner (0) + currentFeeBps (3000) into slot 1
+        vm.store(hookAddr, bytes32(uint256(1)), bytes32(uint256(3000) << 160));
 
         // Initialize pool with dynamic fee
         (key,) = initPoolAndAddLiquidity(
@@ -95,7 +94,7 @@ contract CouncilFeeHookTest is Test, Deployers {
 
     function test_setFee_revertTooHigh() public {
         vm.expectRevert("fee too high");
-        hook.setFee(100_001);
+        hook.setFee(10_001);
     }
 
     function test_beforeSwap_usesDynamicFee() public {
@@ -133,10 +132,11 @@ contract SwapGuardHookTest is Test, Deployers {
 
         // Storage layout:
         // slot 0: owner (address)
-        // slot 1: maxSwapSize (uint256)
-        // slot 2: blockedCount (uint256)
+        // slot 1: pendingOwner (address)
+        // slot 2: maxSwapSize (uint256)
+        // slot 3: blockedCount (uint256)
         vm.store(hookAddr, bytes32(uint256(0)), bytes32(uint256(uint160(owner))));
-        vm.store(hookAddr, bytes32(uint256(1)), bytes32(type(uint256).max));
+        vm.store(hookAddr, bytes32(uint256(2)), bytes32(type(uint256).max));
 
         (key,) = initPoolAndAddLiquidity(currency0, currency1, IHooks(hookAddr), 3000, SQRT_PRICE_1_1);
     }
@@ -146,14 +146,14 @@ contract SwapGuardHookTest is Test, Deployers {
     }
 
     function test_setMaxSwapSize() public {
-        hook.setMaxSwapSize(1000);
-        assertEq(hook.maxSwapSize(), 1000);
+        hook.setMaxSwapSize(1 ether);
+        assertEq(hook.maxSwapSize(), 1 ether);
     }
 
     function test_setMaxSwapSize_emitsEvent() public {
         vm.expectEmit(false, false, false, true);
-        emit SwapGuardHook.MaxSwapSizeUpdated(type(uint256).max, 500);
-        hook.setMaxSwapSize(500);
+        emit SwapGuardHook.MaxSwapSizeUpdated(type(uint256).max, 0.5 ether);
+        hook.setMaxSwapSize(0.5 ether);
     }
 
     function test_setMaxSwapSize_revertNotOwner() public {
@@ -169,7 +169,10 @@ contract SwapGuardHookTest is Test, Deployers {
     }
 
     function test_largeSwap_reverts() public {
-        hook.setMaxSwapSize(10);
+        // SWAP_PARAMS.amountSpecified = -100, so set max to 10 (below 100).
+        // But contract requires _max >= 0.01 ether, so we set it via vm.store directly
+        // to simulate a scenario where maxSwapSize is small.
+        vm.store(address(hook), bytes32(uint256(2)), bytes32(uint256(10)));
         PoolSwapTest.TestSettings memory settings =
             PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false});
         vm.expectRevert();
@@ -203,11 +206,12 @@ contract SentimentOracleHookTest is Test, Deployers {
 
         // Storage layout:
         // slot 0: owner (address)
-        // slot 1: sentiment (int8) — packed with sentimentReason offset? No, separate slots.
-        //   Actually: int8 sentiment is slot 1, string sentimentReason is slot 2,
-        //   uint256 swapCount is slot 3, uint256 lastUpdated is slot 4
+        // slot 1: pendingOwner (address, 20B) | sentiment (int8, 1B) — packed
+        // slot 2: sentimentReason (string)
+        // slot 3: swapCount (uint256)
+        // slot 4: lastUpdated (uint256)
         vm.store(hookAddr, bytes32(uint256(0)), bytes32(uint256(uint160(owner))));
-        // Leave sentiment/swapCount/lastUpdated at defaults (0)
+        // Leave pendingOwner/sentiment/swapCount/lastUpdated at defaults (0)
 
         (key,) = initPoolAndAddLiquidity(currency0, currency1, IHooks(hookAddr), 3000, SQRT_PRICE_1_1);
     }
