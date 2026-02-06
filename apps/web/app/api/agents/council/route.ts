@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createPublicClient, http } from 'viem'
+import { mainnet } from 'viem/chains'
+import { normalize } from 'viem/ens'
 import { runCouncilDeliberation, runTokenLaunchDeliberation, isTokenLaunchPrompt, type CouncilRequest } from '@/lib/agents/council'
 
 const RATE_LIMIT_WINDOW_MS = 60_000
@@ -89,9 +92,29 @@ async function handleDeliberation(request: NextRequest): Promise<NextResponse> {
     }
 
     const walletAddress = body.walletAddress || '0x0000000000000000000000000000000000000000'
-    
-    if (body.agentEndpoint) {
-      console.log('[API] External agent endpoint configured:', body.agentEndpoint)
+
+    // ENS endpoint fallback: if no agentEndpoint but walletAddress provided, try ENS lookup
+    if (!councilRequest.agentEndpoint && body.walletAddress) {
+      try {
+        const ensClient = createPublicClient({ chain: mainnet, transport: http() })
+        const ensName = await ensClient.getEnsName({ address: body.walletAddress as `0x${string}` })
+        if (ensName) {
+          const endpoint = await ensClient.getEnsText({
+            name: normalize(ensName),
+            key: 'com.agentropolis.endpoint',
+          })
+          if (endpoint) {
+            console.log(`[API] Resolved ENS endpoint for ${ensName}: ${endpoint}`)
+            councilRequest.agentEndpoint = endpoint
+          }
+        }
+      } catch (err) {
+        console.warn('[API] ENS lookup failed:', err)
+      }
+    }
+
+    if (councilRequest.agentEndpoint) {
+      console.log('[API] External agent endpoint configured:', councilRequest.agentEndpoint)
     }
     
     const result = isTokenLaunchPrompt(userPrompt)
