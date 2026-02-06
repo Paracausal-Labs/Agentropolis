@@ -23,30 +23,6 @@ export interface DeliberationResult {
 // Strategy types for proposals
 export type StrategyType = 'swap' | 'dca' | 'lp_full_range' | 'lp_concentrated' | 'token_launch'
 
-export interface TradeProposal {
-  id: string
-  agentId: string
-  agentName: string
-  pair: {
-    tokenIn: { symbol: string; address: string }
-    tokenOut: { symbol: string; address: string }
-  }
-  action: 'swap' | 'rebalance' | 'dca'
-  strategyType?: StrategyType
-  amountIn: string
-  expectedAmountOut: string
-  maxSlippage: number
-  deadline: number
-  reasoning: string
-  confidence: number
-  riskLevel: 'low' | 'medium' | 'high'
-  // LP-specific fields
-  tickLower?: number
-  tickUpper?: number
-  // Multi-agent deliberation
-  deliberation?: DeliberationResult
-}
-
 export interface TokenLaunchProposal {
   id: string
   agentId: string
@@ -134,6 +110,7 @@ export interface ExecutionPlan {
   slippageBps: number
   minAmountOut: string    // wei as decimal string
   deadlineSeconds: number
+  tokenOutDecimals?: number
   simulation: {
     ok: boolean
     error?: string

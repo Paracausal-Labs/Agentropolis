@@ -302,6 +302,7 @@ export async function buildExecutionPlan(
     slippageBps,
     minAmountOut: minAmountOut.toString(),
     deadlineSeconds,
+    tokenOutDecimals: getTokenDecimals(tokenOut),
     simulation: {
       ok: simulation.ok,
       error: simulation.error,
@@ -346,6 +347,7 @@ export const executeSwap = async (
       slippageBps: DEFAULT_SLIPPAGE_BPS,
       minAmountOut: '0',
       deadlineSeconds: 0,
+      tokenOutDecimals: 18,
       simulation: { ok: true },
     }
     const mockReceipt: SwapReceipt = {

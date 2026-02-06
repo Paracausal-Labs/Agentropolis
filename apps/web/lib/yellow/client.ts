@@ -101,7 +101,7 @@ export async function createNitroliteClient(
       stateSigner,
       addresses: {
         custody: networkConfig?.custodyAddress || YELLOW_CONTRACTS.CUSTODY,
-        adjudicator: networkConfig?.adjudicatorAddress || YELLOW_CONTRACTS.CUSTODY,
+        adjudicator: networkConfig?.adjudicatorAddress || YELLOW_CONTRACTS.ADJUDICATOR,
       },
       chainId: YELLOW_CHAIN_ID,
       challengeDuration: BigInt(86400),
@@ -120,7 +120,7 @@ export async function createNitroliteClient(
       stateSigner,
       addresses: {
         custody: YELLOW_CONTRACTS.CUSTODY,
-        adjudicator: YELLOW_CONTRACTS.CUSTODY,
+        adjudicator: YELLOW_CONTRACTS.ADJUDICATOR,
       },
       chainId: YELLOW_CHAIN_ID,
       challengeDuration: BigInt(86400),
@@ -145,8 +145,5 @@ export function connectToClearnode(): Promise<WebSocket> {
 }
 
 export function isMockMode(): boolean {
-  return (
-    process.env.NEXT_PUBLIC_YELLOW_MOCK === 'true' ||
-    typeof window === 'undefined'
-  )
+  return process.env.NEXT_PUBLIC_YELLOW_MOCK === 'true'
 }

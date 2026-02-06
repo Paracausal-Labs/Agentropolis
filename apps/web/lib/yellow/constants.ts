@@ -10,7 +10,11 @@ export const YELLOW_CLEARNODE_URL = 'wss://clearnet-sandbox.yellow.com/ws'
 export const YELLOW_CONTRACTS = {
   // Custody contract for deposits/withdrawals
   CUSTODY: '0x019B65A265EB3363822f2752141b3dF16131b262' as Address,
-  
+
+  // Adjudicator contract for state channel disputes
+  // TODO: Replace with actual adjudicator address once deployed separately
+  ADJUDICATOR: '0x019B65A265EB3363822f2752141b3dF16131b262' as Address,
+
   // ytest.USD token (6 decimals) - test stablecoin for Yellow sandbox
   YTEST_USD: '0xDB9F293e3898c9E5536A3be1b0C56c89d2b32DEb' as Address,
 } as const

@@ -114,7 +114,7 @@ export function SwapHandler() {
             {plan && (
               <div className="text-xs text-gray-400 mt-1">
                 <div>Quote: {plan.quote.amountOut} out</div>
-                <div>Min out: {plan.minAmountOut !== '0' ? formatUnits(BigInt(plan.minAmountOut), 18) : '...'}</div>
+                <div>Min out: {plan.minAmountOut !== '0' ? formatUnits(BigInt(plan.minAmountOut), plan.tokenOutDecimals ?? 18) : '...'}</div>
                 <div>Fee tier: {formatFeeTier(plan.quote.poolKey.fee)}</div>
               </div>
             )}
