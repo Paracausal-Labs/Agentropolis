@@ -45,7 +45,7 @@ export function AppPageContent() {
               </h1>
               <div className="flex gap-2 text-[10px] text-[#00F0FF] font-mono mt-1">
                 <span>SYS: ONLINE</span>
-                <span>//</span>
+                <span>{'//'}</span>
                 <span>PING: 12ms</span>
               </div>
             </div>
