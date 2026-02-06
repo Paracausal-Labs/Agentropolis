@@ -1062,4 +1062,93 @@ export async function runTokenLaunchDeliberation(
   return { deliberation: { messages, consensus, voteTally, rounds: 1 }, proposal }
 }
 
+// ─── V4 Hook Integration ───
+
+export interface HookParameters {
+  feeBps: number
+  maxSwapSize: string
+  sentimentScore: number
+  sentimentReason: string
+}
+
+/**
+ * Extract hook parameters from a council deliberation result.
+ * Maps council consensus → on-chain hook parameters:
+ *   - Fee: higher when risk is high, lower when council is bullish
+ *   - MaxSwapSize: tighter when risk is elevated
+ *   - Sentiment: derived from consensus and confidence
+ */
+export function extractHookParameters(
+  deliberation: DeliberationResult,
+  riskLevel: 'low' | 'medium' | 'high'
+): HookParameters {
+  const { consensus, voteTally } = deliberation
+
+  // Fee: scale based on risk + consensus
+  let feeBps = 3000 // default 0.3%
+  if (riskLevel === 'high' || consensus === 'vetoed') {
+    feeBps = 10000 // 1% — discourage swaps in risky conditions
+  } else if (riskLevel === 'low' && consensus === 'unanimous') {
+    feeBps = 500 // 0.05% — encourage swaps when council is confident
+  } else if (consensus === 'contested') {
+    feeBps = 5000 // 0.5% — moderate caution
+  }
+
+  // MaxSwapSize: tighter guardrails when risk is elevated
+  let maxSwapSize: string
+  if (riskLevel === 'high' || consensus === 'vetoed') {
+    maxSwapSize = '1000000000000000000' // 1 ETH
+  } else if (riskLevel === 'medium') {
+    maxSwapSize = '10000000000000000000' // 10 ETH
+  } else {
+    maxSwapSize = '100000000000000000000' // 100 ETH
+  }
+
+  // Sentiment: -100 to +100 derived from vote tally
+  const total = voteTally.support + voteTally.oppose + voteTally.abstain
+  const sentimentScore = total > 0
+    ? Math.round(((voteTally.support - voteTally.oppose) / total) * 100)
+    : 0
+
+  // Build reason from consensus
+  const sentimentReason = `Council ${consensus}: ${voteTally.support}S/${voteTally.oppose}O/${voteTally.abstain}A, risk=${riskLevel}`
+
+  return { feeBps, maxSwapSize, sentimentScore, sentimentReason }
+}
+
+/**
+ * Push hook parameters to chain via the /api/hooks/update endpoint.
+ * Called after council deliberation completes.
+ */
+export async function updateHookParameters(params: HookParameters): Promise<void> {
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+    const res = await fetch(`${baseUrl}/api/hooks/update`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-hook-auth': process.env.HOOK_AUTH_SECRET ?? '',
+      },
+      body: JSON.stringify({
+        feeBps: params.feeBps,
+        maxSwapSize: params.maxSwapSize,
+        sentimentScore: params.sentimentScore,
+        sentimentReason: params.sentimentReason,
+      }),
+    })
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      console.error('[Council→Hooks] Update failed:', err)
+      return
+    }
+
+    const result = await res.json()
+    console.log('[Council→Hooks] Parameters updated on-chain:', result)
+  } catch (err) {
+    // Non-fatal: hooks update is best-effort, don't block deliberation
+    console.error('[Council→Hooks] Failed to update hook parameters:', err)
+  }
+}
+
 export { AGENT_PERSONAS, isTokenLaunchPrompt }

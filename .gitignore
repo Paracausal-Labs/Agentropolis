@@ -60,6 +60,11 @@ test-results/
 playwright-report/
 playwright/.cache/
 
+# Claude Code
+.claude/
+CLAUDE.md
+MEMORY.md
+
 # Internal planning (do not commit)
 .sisyphus/
 PLAN.md
@@ -67,8 +72,10 @@ CONTEXT.md
 context.md
 WORKPLAN.md
 AUDIT.md
+GAMEDESIGN.md
 AUDIT_*.md
 LOGIC_AUDIT*.md
+AGENTIC_FINANCE_PLAN.md
 TESTING.md
 testing.md
 logs.md

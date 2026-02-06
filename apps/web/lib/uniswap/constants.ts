@@ -18,6 +18,16 @@ export const TOKEN_DECIMALS: Record<string, number> = {
   [TOKENS.WETH.toLowerCase()]: 18,
 }
 
+// V4 Hook contracts — update after deploying via DeployHooks.s.sol
+export const HOOKS = {
+  COUNCIL_FEE: (process.env.NEXT_PUBLIC_COUNCIL_FEE_HOOK ?? '0x0000000000000000000000000000000000000000') as `0x${string}`,
+  SWAP_GUARD: (process.env.NEXT_PUBLIC_SWAP_GUARD_HOOK ?? '0x0000000000000000000000000000000000000000') as `0x${string}`,
+  SENTIMENT_ORACLE: (process.env.NEXT_PUBLIC_SENTIMENT_ORACLE_HOOK ?? '0x0000000000000000000000000000000000000000') as `0x${string}`,
+}
+
+// Dynamic fee flag used by CouncilFeeHook pools
+export const DYNAMIC_FEE_FLAG = 0x800000
+
 export const POOL_KEY = {
   currency0: TOKENS.USDC,
   currency1: TOKENS.WETH,

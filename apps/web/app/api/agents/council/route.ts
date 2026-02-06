@@ -2,7 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createPublicClient, http } from 'viem'
 import { sepolia } from 'viem/chains'
 import { normalize } from 'viem/ens'
-import { runCouncilDeliberation, runTokenLaunchDeliberation, isTokenLaunchPrompt, type CouncilRequest } from '@/lib/agents/council'
+import {
+  runCouncilDeliberation,
+  runTokenLaunchDeliberation,
+  isTokenLaunchPrompt,
+  extractHookParameters,
+  updateHookParameters,
+  type CouncilRequest,
+} from '@/lib/agents/council'
 
 const RATE_LIMIT_WINDOW_MS = 60_000
 const RATE_LIMIT_MAX_REQUESTS = 5 // Lower limit for council (more expensive)
@@ -121,10 +128,16 @@ async function handleDeliberation(request: NextRequest): Promise<NextResponse> {
       ? await runTokenLaunchDeliberation(councilRequest, walletAddress)
       : await runCouncilDeliberation(councilRequest)
 
+    // Fire-and-forget: push council decisions to V4 hooks on-chain
+    const riskLevel = (councilRequest.context.riskLevel ?? 'medium') as 'low' | 'medium' | 'high'
+    const hookParams = extractHookParameters(result.deliberation, riskLevel)
+    updateHookParameters(hookParams).catch(() => {})
+
     return NextResponse.json({
       success: true,
       deliberation: result.deliberation,
       proposal: result.proposal,
+      hookParameters: hookParams,
     })
   } catch (error) {
     console.error('[API] Council deliberation error:', error)
