@@ -1,4 +1,5 @@
 # Agentropolis
+<img width="3392" height="1248" alt="image" src="https://github.com/user-attachments/assets/c228a286-3d02-4464-8c9f-32ec117a058e" />
 
 **Build a city of agents. Approve their plans. Execute trades on-chain.**
 
