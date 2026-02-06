@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createPublicClient, http } from 'viem'
-import { mainnet } from 'viem/chains'
+import { sepolia } from 'viem/chains'
 import { normalize } from 'viem/ens'
 import { runCouncilDeliberation, runTokenLaunchDeliberation, isTokenLaunchPrompt, type CouncilRequest } from '@/lib/agents/council'
 
@@ -96,7 +96,7 @@ async function handleDeliberation(request: NextRequest): Promise<NextResponse> {
     // ENS endpoint fallback: if no agentEndpoint but walletAddress provided, try ENS lookup
     if (!councilRequest.agentEndpoint && body.walletAddress) {
       try {
-        const ensClient = createPublicClient({ chain: mainnet, transport: http() })
+        const ensClient = createPublicClient({ chain: sepolia, transport: http() })
         const ensName = await ensClient.getEnsName({ address: body.walletAddress as `0x${string}` })
         if (ensName) {
           const endpoint = await ensClient.getEnsText({
