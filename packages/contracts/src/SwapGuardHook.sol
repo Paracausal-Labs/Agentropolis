@@ -12,14 +12,32 @@ import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "@uniswap/v4-core/src/type
 /// @notice Risk Sentinel agent sets maxSwapSize — any swap exceeding the threshold is reverted.
 contract SwapGuardHook is BaseHook {
     address public owner;
+    address public pendingOwner;
     uint256 public maxSwapSize = type(uint256).max; // no limit by default
     uint256 public blockedCount;
 
     event SwapBlocked(address indexed sender, int256 amount, uint256 maxAllowed);
     event MaxSwapSizeUpdated(uint256 oldMax, uint256 newMax);
+    event OwnershipTransferInitiated(address indexed currentOwner, address indexed pendingOwner);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     constructor(IPoolManager _pm, address _owner) BaseHook(_pm) {
         owner = _owner;
+    }
+
+    function transferOwnership(address newOwner) external {
+        require(msg.sender == owner, "not owner");
+        require(newOwner != address(0), "zero address");
+        pendingOwner = newOwner;
+        emit OwnershipTransferInitiated(owner, newOwner);
+    }
+
+    function acceptOwnership() external {
+        require(msg.sender == pendingOwner, "not pending owner");
+        address oldOwner = owner;
+        owner = pendingOwner;
+        pendingOwner = address(0);
+        emit OwnershipTransferred(oldOwner, owner);
     }
 
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
@@ -44,6 +62,7 @@ contract SwapGuardHook is BaseHook {
     /// @notice Risk Sentinel calls this to update the max swap size
     function setMaxSwapSize(uint256 _max) external {
         require(msg.sender == owner, "not owner");
+        require(_max >= 0.01 ether, "max too low");
         uint256 old = maxSwapSize;
         maxSwapSize = _max;
         emit MaxSwapSizeUpdated(old, _max);

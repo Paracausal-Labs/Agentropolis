@@ -13,12 +13,30 @@ import {LPFeeLibrary} from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
 /// @notice AI council votes on swap fees — beforeSwap reads currentFeeBps and overrides the LP fee dynamically.
 contract CouncilFeeHook is BaseHook {
     address public owner;
+    address public pendingOwner;
     uint24 public currentFeeBps = 3000; // default 0.3%
 
     event FeeUpdated(uint24 oldFee, uint24 newFee, uint256 timestamp);
+    event OwnershipTransferInitiated(address indexed currentOwner, address indexed pendingOwner);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     constructor(IPoolManager _pm, address _owner) BaseHook(_pm) {
         owner = _owner;
+    }
+
+    function transferOwnership(address newOwner) external {
+        require(msg.sender == owner, "not owner");
+        require(newOwner != address(0), "zero address");
+        pendingOwner = newOwner;
+        emit OwnershipTransferInitiated(owner, newOwner);
+    }
+
+    function acceptOwnership() external {
+        require(msg.sender == pendingOwner, "not pending owner");
+        address oldOwner = owner;
+        owner = pendingOwner;
+        pendingOwner = address(0);
+        emit OwnershipTransferred(oldOwner, owner);
     }
 
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
@@ -43,7 +61,8 @@ contract CouncilFeeHook is BaseHook {
     /// @notice Council relayer calls this to update the fee based on council consensus
     function setFee(uint24 newFeeBps) external {
         require(msg.sender == owner, "not owner");
-        require(newFeeBps <= 100_000, "fee too high"); // max 10%
+        require(newFeeBps >= 10, "fee too low");      // min 0.001%
+        require(newFeeBps <= 10_000, "fee too high");  // max 1%
         uint24 oldFee = currentFeeBps;
         currentFeeBps = newFeeBps;
         emit FeeUpdated(oldFee, newFeeBps, block.timestamp);
