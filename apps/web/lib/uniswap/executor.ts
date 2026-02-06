@@ -8,12 +8,14 @@ import {
   parseUnits,
   type Address,
   type Hex,
+  type PublicClient,
   type WalletClient,
 } from 'viem'
 import { baseSepolia } from 'viem/chains'
-import type { TradeProposal } from '@agentropolis/shared/src/types'
-import { CONTRACTS, POOL_KEY, RPC_URL, TOKEN_DECIMALS } from './constants'
-import { computePoolId, type PoolKey } from './pools'
+import type { TradeProposal, ExecutionPlan, SwapReceipt } from '@agentropolis/shared/src/types'
+import { CONTRACTS, RPC_URL, TOKEN_DECIMALS } from './constants'
+import { type PoolKey } from './pools'
+import { getBestFeeTier } from './fee-tier-router'
 
 const UNIVERSAL_ROUTER_ABI = [
   {
@@ -49,6 +51,13 @@ const ERC20_ABI = [
       { name: 'amount', type: 'uint256' },
     ],
     outputs: [{ name: 'success', type: 'bool' }],
+  },
+  {
+    type: 'function',
+    name: 'balanceOf',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: 'balance', type: 'uint256' }],
   },
 ] as const
 
@@ -105,24 +114,14 @@ const parseAmount = (value: string | number, decimals: number) => {
   }
 }
 
-const DEMO_MIN_SLIPPAGE_BPS = 3000 // 30% minimum slippage for demo to prevent reverts from bad AI estimates
-
-const computeMinAmountOut = (expectedAmountOut: bigint, maxSlippage: number) => {
-  if (expectedAmountOut === 0n) return 0n
-  const slippage = Number.isFinite(maxSlippage) ? maxSlippage : 0
-  const slippageBps =
-    slippage <= 1
-      ? Math.round(slippage * 10_000)
-      : Math.round(slippage)
-  const effectiveBps = Math.max(DEMO_MIN_SLIPPAGE_BPS, Math.min(10_000, slippageBps))
-  return expectedAmountOut - (expectedAmountOut * BigInt(effectiveBps)) / 10_000n
-}
+const DEFAULT_SLIPPAGE_BPS = 300 // 3% default slippage from quote
 
 const encodeV4SwapInput = (
   account: Address,
   amountIn: bigint,
   minAmountOut: bigint,
-  zeroForOne: boolean
+  zeroForOne: boolean,
+  poolKey: PoolKey
 ): Hex => {
   const actions = encodePacked(
     ['uint8', 'uint8', 'uint8'],
@@ -156,11 +155,11 @@ const encodeV4SwapInput = (
     [
       {
         poolKey: {
-          currency0: POOL_KEY.currency0,
-          currency1: POOL_KEY.currency1,
-          fee: POOL_KEY.fee,
-          tickSpacing: POOL_KEY.tickSpacing,
-          hooks: POOL_KEY.hooks,
+          currency0: poolKey.currency0,
+          currency1: poolKey.currency1,
+          fee: poolKey.fee,
+          tickSpacing: poolKey.tickSpacing,
+          hooks: poolKey.hooks,
         },
         zeroForOne,
         amountIn,
@@ -170,8 +169,8 @@ const encodeV4SwapInput = (
     ]
   )
 
-  const currencyIn = zeroForOne ? POOL_KEY.currency0 : POOL_KEY.currency1
-  const currencyOut = zeroForOne ? POOL_KEY.currency1 : POOL_KEY.currency0
+  const currencyIn = zeroForOne ? poolKey.currency0 : poolKey.currency1
+  const currencyOut = zeroForOne ? poolKey.currency1 : poolKey.currency0
 
   const settleParams = encodeAbiParameters(
     [{ name: 'currency', type: 'address' }, { name: 'maxAmount', type: 'uint256' }],
@@ -189,27 +188,140 @@ const encodeV4SwapInput = (
   )
 }
 
-const assertSupportedPair = (proposal: TradeProposal) => {
-  const tokenIn = proposal.pair.tokenIn.address.toLowerCase()
-  const tokenOut = proposal.pair.tokenOut.address.toLowerCase()
-  const currency0 = POOL_KEY.currency0.toLowerCase()
-  const currency1 = POOL_KEY.currency1.toLowerCase()
+async function readBalances(
+  account: Address,
+  tokenIn: Address,
+  tokenOut: Address,
+  publicClient: PublicClient
+): Promise<{ tokenIn: bigint; tokenOut: bigint }> {
+  const [balIn, balOut] = await Promise.all([
+    publicClient.readContract({
+      address: tokenIn,
+      abi: ERC20_ABI,
+      functionName: 'balanceOf',
+      args: [account],
+    }),
+    publicClient.readContract({
+      address: tokenOut,
+      abi: ERC20_ABI,
+      functionName: 'balanceOf',
+      args: [account],
+    }),
+  ])
+  return { tokenIn: balIn, tokenOut: balOut }
+}
 
-  const isMatch =
-    (tokenIn === currency0 && tokenOut === currency1) ||
-    (tokenIn === currency1 && tokenOut === currency0)
+async function simulateSwap(
+  account: Address,
+  amountIn: bigint,
+  minAmountOut: bigint,
+  zeroForOne: boolean,
+  poolKey: PoolKey,
+  deadlineSeconds: number,
+  publicClient: PublicClient
+): Promise<{ ok: boolean; error?: string; gasEstimate?: bigint }> {
+  const swapInput = encodeV4SwapInput(account, amountIn, minAmountOut, zeroForOne, poolKey)
+  const commands: Hex = `0x${V4_SWAP_COMMAND.toString(16).padStart(2, '0')}`
 
-  if (!isMatch) {
-    throw new Error('Unsupported token pair for configured pool')
+  try {
+    await publicClient.simulateContract({
+      address: CONTRACTS.UNIVERSAL_ROUTER,
+      abi: UNIVERSAL_ROUTER_ABI,
+      functionName: 'execute',
+      args: [commands, [swapInput], BigInt(deadlineSeconds)],
+      account,
+    })
+    // If simulation succeeds, try to estimate gas
+    let gasEstimate: bigint | undefined
+    try {
+      gasEstimate = await publicClient.estimateContractGas({
+        address: CONTRACTS.UNIVERSAL_ROUTER,
+        abi: UNIVERSAL_ROUTER_ABI,
+        functionName: 'execute',
+        args: [commands, [swapInput], BigInt(deadlineSeconds)],
+        account,
+      })
+    } catch {
+      // gas estimation can fail even when simulation succeeds
+    }
+    return { ok: true, gasEstimate }
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : 'Simulation failed',
+    }
+  }
+}
+
+export async function buildExecutionPlan(
+  proposal: TradeProposal,
+  publicClient: PublicClient,
+  account: Address
+): Promise<ExecutionPlan> {
+  const tokenIn = proposal.pair.tokenIn.address
+  const tokenOut = proposal.pair.tokenOut.address
+  const amountIn = parseAmount(proposal.amountIn, getTokenDecimals(tokenIn))
+
+  if (amountIn <= 0n) {
+    throw new Error('Invalid amountIn: must be greater than 0')
+  }
+
+  // Route through best fee tier
+  const { poolKey, quote } = await getBestFeeTier(tokenIn, tokenOut, amountIn)
+
+  console.log(`[executor] Quote: ${quote.amountOut} out via ${poolKey.fee}bps pool`)
+
+  // Compute minAmountOut from quote + slippage
+  const slippageBps = DEFAULT_SLIPPAGE_BPS
+  const quoteOutWei = BigInt(quote.amountOutWei)
+  const minAmountOut = quoteOutWei - (quoteOutWei * BigInt(slippageBps)) / 10_000n
+
+  // Compute deadline
+  const nowSeconds = Math.floor(Date.now() / 1000)
+  const proposalDeadline = proposal.deadline > 1_000_000_000_000
+    ? Math.floor(proposal.deadline / 1000)
+    : proposal.deadline
+  const deadlineSeconds = Math.max(proposalDeadline, nowSeconds + 300) // at least 5 min from now
+
+  // Determine swap direction
+  const zeroForOne = tokenIn.toLowerCase() === poolKey.currency0.toLowerCase()
+
+  // Simulate
+  const simulation = await simulateSwap(
+    account,
+    amountIn,
+    minAmountOut,
+    zeroForOne,
+    poolKey,
+    deadlineSeconds,
+    publicClient
+  )
+
+  return {
+    quote,
+    slippageBps,
+    minAmountOut: minAmountOut.toString(),
+    deadlineSeconds,
+    simulation: {
+      ok: simulation.ok,
+      error: simulation.error,
+      gasEstimate: simulation.gasEstimate?.toString(),
+    },
   }
 }
 
 const BASE_SEPOLIA_CHAIN_ID = 84532
 
+export interface SwapResult {
+  txHash: string
+  executionPlan: ExecutionPlan
+  receipt: SwapReceipt
+}
+
 export const executeSwap = async (
   proposal: TradeProposal,
   walletClient?: WalletClient
-): Promise<{ txHash: string }> => {
+): Promise<SwapResult> => {
   if (mockEnabled) {
     console.info('[uniswap][mock] swap', {
       proposalId: proposal.id,
@@ -219,7 +331,34 @@ export const executeSwap = async (
       maxSlippage: proposal.maxSlippage,
       deadline: proposal.deadline,
     })
-    return { txHash: toRandomHex() }
+    const mockPlan: ExecutionPlan = {
+      quote: {
+        amountIn: proposal.amountIn,
+        amountInWei: '0',
+        amountOut: proposal.expectedAmountOut,
+        amountOutWei: '0',
+        source: 'offchain',
+        timestamp: Date.now(),
+        poolKey: { currency0: '', currency1: '', fee: 3000, tickSpacing: 60, hooks: '' },
+        sqrtPriceX96: '0',
+        tick: 0,
+      },
+      slippageBps: DEFAULT_SLIPPAGE_BPS,
+      minAmountOut: '0',
+      deadlineSeconds: 0,
+      simulation: { ok: true },
+    }
+    const mockReceipt: SwapReceipt = {
+      txHash: toRandomHex(),
+      blockNumber: 0,
+      gasUsed: '0',
+      balanceBefore: { tokenIn: '0', tokenOut: '0' },
+      balanceAfter: { tokenIn: '0', tokenOut: '0' },
+      realizedAmountIn: '0',
+      realizedAmountOut: '0',
+      slippageVsQuoteBps: 0,
+    }
+    return { txHash: mockReceipt.txHash, executionPlan: mockPlan, receipt: mockReceipt }
   }
 
   if (!walletClient?.account?.address) {
@@ -230,49 +369,45 @@ export const executeSwap = async (
     throw new Error(`Wrong network. Please switch to Base Sepolia (chainId: ${BASE_SEPOLIA_CHAIN_ID})`)
   }
 
-  assertSupportedPair(proposal)
-
   const account = walletClient.account.address
   const publicClient = createPublicClient({
     chain: walletClient.chain ?? baseSepolia,
     transport: http(RPC_URL),
   })
 
-  const poolId = computePoolId(POOL_KEY as PoolKey)
-  console.log('[uniswap] Executing swap on pool:', poolId)
+  // 1. Build execution plan (quote + simulate)
+  const plan = await buildExecutionPlan(proposal, publicClient, account)
+  console.log('[executor] Execution plan:', {
+    quoteOut: plan.quote.amountOut,
+    minAmountOut: plan.minAmountOut,
+    feeTier: plan.quote.poolKey.fee,
+    simulationOk: plan.simulation.ok,
+  })
 
-  const amountIn = parseAmount(
-    proposal.amountIn,
-    getTokenDecimals(proposal.pair.tokenIn.address)
-  )
-  const expectedAmountOut = parseAmount(
-    proposal.expectedAmountOut,
-    getTokenDecimals(proposal.pair.tokenOut.address)
-  )
-
-  if (amountIn <= 0n) {
-    throw new Error('Invalid amountIn: must be greater than 0')
+  // 2. If simulation fails → throw
+  if (!plan.simulation.ok) {
+    throw new Error(`Swap simulation failed: ${plan.simulation.error}`)
   }
 
-  if (expectedAmountOut <= 0n) {
-    throw new Error('Invalid expectedAmountOut: must be greater than 0')
+  const tokenIn = proposal.pair.tokenIn.address as Address
+  const tokenOut = proposal.pair.tokenOut.address as Address
+  const amountIn = parseAmount(proposal.amountIn, getTokenDecimals(tokenIn))
+  const minAmountOut = BigInt(plan.minAmountOut)
+  const poolKey: PoolKey = {
+    currency0: plan.quote.poolKey.currency0 as Address,
+    currency1: plan.quote.poolKey.currency1 as Address,
+    fee: plan.quote.poolKey.fee,
+    tickSpacing: plan.quote.poolKey.tickSpacing,
+    hooks: plan.quote.poolKey.hooks as Address,
   }
+  const zeroForOne = tokenIn.toLowerCase() === poolKey.currency0.toLowerCase()
 
-  const nowSeconds = Math.floor(Date.now() / 1000)
-  const deadlineSeconds = proposal.deadline > 1_000_000_000_000
-    ? Math.floor(proposal.deadline / 1000)
-    : proposal.deadline
-  if (deadlineSeconds <= nowSeconds) {
-    throw new Error('Proposal deadline has expired')
-  }
+  // 3. Read balances before
+  const balBefore = await readBalances(account, tokenIn, tokenOut, publicClient)
 
-  const minAmountOut = computeMinAmountOut(expectedAmountOut, proposal.maxSlippage)
-
-  const tokenIn = proposal.pair.tokenIn.address.toLowerCase()
-  const zeroForOne = tokenIn === POOL_KEY.currency0.toLowerCase()
-
+  // 4. Approve if needed
   const allowance = await publicClient.readContract({
-    address: proposal.pair.tokenIn.address as Address,
+    address: tokenIn,
     abi: ERC20_ABI,
     functionName: 'allowance',
     args: [account, CONTRACTS.UNIVERSAL_ROUTER],
@@ -280,31 +415,63 @@ export const executeSwap = async (
 
   if (allowance < amountIn) {
     const approvalHash = await walletClient.writeContract({
-      address: proposal.pair.tokenIn.address as Address,
+      address: tokenIn,
       abi: ERC20_ABI,
       functionName: 'approve',
       args: [CONTRACTS.UNIVERSAL_ROUTER, amountIn],
       account,
       chain: walletClient.chain ?? null,
     })
-
     await publicClient.waitForTransactionReceipt({ hash: approvalHash })
   }
 
-  const swapInput = encodeV4SwapInput(account, amountIn, minAmountOut, zeroForOne)
+  // 5. Execute swap
+  const swapInput = encodeV4SwapInput(account, amountIn, minAmountOut, zeroForOne, poolKey)
   const commands: Hex = `0x${V4_SWAP_COMMAND.toString(16).padStart(2, '0')}`
-  const inputs: Hex[] = [swapInput]
 
   const txHash = await walletClient.writeContract({
     address: CONTRACTS.UNIVERSAL_ROUTER,
     abi: UNIVERSAL_ROUTER_ABI,
     functionName: 'execute',
-    args: [commands, inputs, BigInt(deadlineSeconds)],
+    args: [commands, [swapInput], BigInt(plan.deadlineSeconds)],
     account,
     chain: walletClient.chain ?? null,
   })
 
-  return { txHash }
+  // 6. Wait for receipt + read balances after
+  const txReceipt = await publicClient.waitForTransactionReceipt({ hash: txHash })
+  const balAfter = await readBalances(account, tokenIn, tokenOut, publicClient)
+
+  // 7. Compute SwapReceipt
+  const realizedIn = balBefore.tokenIn - balAfter.tokenIn
+  const realizedOut = balAfter.tokenOut - balBefore.tokenOut
+  const quoteOutWei = BigInt(plan.quote.amountOutWei)
+
+  let slippageVsQuoteBps = 0
+  if (quoteOutWei > 0n) {
+    // positive = worse than quote, negative = better than quote
+    slippageVsQuoteBps = Number(((quoteOutWei - realizedOut) * 10_000n) / quoteOutWei)
+  }
+
+  const receipt: SwapReceipt = {
+    txHash,
+    blockNumber: Number(txReceipt.blockNumber),
+    gasUsed: txReceipt.gasUsed.toString(),
+    balanceBefore: { tokenIn: balBefore.tokenIn.toString(), tokenOut: balBefore.tokenOut.toString() },
+    balanceAfter: { tokenIn: balAfter.tokenIn.toString(), tokenOut: balAfter.tokenOut.toString() },
+    realizedAmountIn: realizedIn.toString(),
+    realizedAmountOut: realizedOut.toString(),
+    slippageVsQuoteBps,
+  }
+
+  console.log('[executor] Swap complete:', {
+    txHash,
+    realizedOut: realizedOut.toString(),
+    slippageVsQuoteBps,
+    gasUsed: txReceipt.gasUsed.toString(),
+  })
+
+  return { txHash, executionPlan: plan, receipt }
 }
 
 export const useSwapExecutor = () => {
