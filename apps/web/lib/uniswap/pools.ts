@@ -176,6 +176,13 @@ export const COMMON_POOLS: PoolKey[] = [
     tickSpacing: 10,
     hooks: '0x0000000000000000000000000000000000000000' as Address,
   },
+  {
+    currency0: TOKENS.USDC as Address,
+    currency1: TOKENS.WETH as Address,
+    fee: 10000,
+    tickSpacing: 200,
+    hooks: '0x0000000000000000000000000000000000000000' as Address,
+  },
 ]
 
 export const discoverPools = async (): Promise<PoolInfo[]> => {
