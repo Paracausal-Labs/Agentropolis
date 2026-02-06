@@ -15,7 +15,13 @@ function GameLoop() {
     return null
 }
 
-export default function CityView3D({ onEnterCouncil }: { onEnterCouncil: () => void }) {
+interface CityView3DProps {
+    onEnterCouncil: () => void
+    onEnterTownHall?: () => void
+    onEnterBattle?: () => void
+}
+
+export default function CityView3D({ onEnterCouncil, onEnterTownHall, onEnterBattle }: CityView3DProps) {
     const { state, actions } = useGame()
     const [showDeployEffect, setShowDeployEffect] = useState<[number, number, number] | null>(null)
     const [coins, setCoins] = useState<{ id: string, position: [number, number, number], type: 'bronze' | 'silver' | 'gold', collected: boolean }[]>([])
@@ -84,7 +90,7 @@ export default function CityView3D({ onEnterCouncil }: { onEnterCouncil: () => v
                 onPosUpdate={checkCoinCollection}
             />
         ))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [state.deployedAgents, coins])
 
     return (
@@ -153,29 +159,10 @@ export default function CityView3D({ onEnterCouncil }: { onEnterCouncil: () => v
                 {showDeployEffect && <DeploymentEffect position={showDeployEffect} />}
             </Scene3D>
 
-            {/* UI Layer */}
-            <div className="absolute top-4 left-4 right-4 flex justify-between pointer-events-none">
-                {/* Stats Panel */}
-                <div className="cyber-panel p-3 clip-corner-tl bg-black/80 pointer-events-auto">
-                    <div className="flex gap-6 text-sm font-mono">
-                        <div>
-                            <div className="text-[#8a8aa0] text-xs">BALANCE</div>
-                            <div className="text-[#FCEE0A] font-bold text-xl">
-                                {hasMounted ? state.ytestBalance.toFixed(3) : '0.000'} <span className="text-xs">YES</span>
-                            </div>
-                        </div>
-                        <div>
-                            <div className="text-[#8a8aa0] text-xs">XP / G-LEVEL</div>
-                            <div className="text-[#00F0FF] font-bold text-xl">
-                                {hasMounted ? state.xpTotal : '0'} <span className="text-xs text-white">LVL {hasMounted ? state.level : '1'}</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
-            {/* Deployment Panel */}
-            <div className="absolute top-24 right-4 w-80 max-h-[calc(100vh-8rem)] overflow-y-auto cyber-panel clip-corner-all">
+
+            {/* Deployment Panel (Right Side) */}
+            <div className="absolute top-12 right-4 w-72 max-h-[calc(100vh-6rem)] overflow-y-auto cyber-panel clip-corner-all bg-black/90">
                 <AgentPanel
                     agents={MOCK_AGENTS}
                     deployedCount={state.deployedAgents.length}
@@ -186,16 +173,23 @@ export default function CityView3D({ onEnterCouncil }: { onEnterCouncil: () => v
             </div>
 
             {/* Bottom Bar */}
-            <div className="absolute bottom-0 left-0 right-0 bg-[#050510]/90 border-t border-[#FCEE0A]/30 p-2 pointer-events-none">
-                <div className="container mx-auto flex justify-between items-center font-mono text-xs">
-                    <div className="flex gap-6 items-center">
+            <div className="absolute bottom-0 left-0 right-0 bg-[#050510]/95 border-t border-[#FCEE0A]/30 px-4 py-2 z-30">
+                <div className="flex justify-between items-center font-mono text-xs">
+                    <div className="flex gap-4 items-center">
                         <span className="text-[#FCEE0A] uppercase tracking-wider">
-                            ACTIVE_AGENTS: <span className="text-white font-bold ml-1">{state.deployedAgents.length}/6</span>
+                            ACTIVE_AGENTS: <span className="text-white font-bold">{state.deployedAgents.length}/6</span>
                         </span>
-                        <div className="h-4 w-[1px] bg-[#FCEE0A]/30"></div>
+                        <div className="h-3 w-px bg-[#FCEE0A]/30"></div>
                         <span className="text-[#00F0FF] animate-pulse">
                             {'>'} CITY_OPERATIONS_NORMAL
                         </span>
+                    </div>
+                    <div className="flex gap-3 items-center">
+                        <span className="text-gray-500">XP:</span>
+                        <span className="text-[#00F0FF] font-bold">{hasMounted ? state.xpTotal : 0}</span>
+                        <div className="h-3 w-px bg-gray-600"></div>
+                        <span className="text-gray-500">BALANCE:</span>
+                        <span className="text-[#FCEE0A] font-bold">{hasMounted ? state.ytestBalance.toFixed(3) : '0.000'} YES</span>
                     </div>
                 </div>
             </div>
@@ -246,7 +240,7 @@ function WalkingAgentWrapper({ agent, onPosUpdate }: { agent: any, onPosUpdate: 
                 }
             }
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [target])
 
     // Movement Loop

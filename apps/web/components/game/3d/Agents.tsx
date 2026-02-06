@@ -4,11 +4,13 @@ import { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { COLORS, AGENT_TYPES } from '@/lib/game-constants'
+import { AGENT_SKINS } from '@/lib/game-data'
 import { Html } from '@react-three/drei'
 
 interface Agent3DProps {
     position: [number, number, number]
     agentType: keyof typeof AGENT_TYPES
+    skinId?: string
     isWalking?: boolean
     walkDirection?: [number, number, number]
     rotation?: number
@@ -24,6 +26,7 @@ interface Agent3DProps {
 export function Agent3D({
     position,
     agentType,
+    skinId = 'default',
     isWalking = false,
     rotation = 0,
     scale = 1,
@@ -37,6 +40,14 @@ export function Agent3D({
     const groupRef = useRef<THREE.Group>(null)
     const bodyRef = useRef<THREE.Mesh>(null)
     const agent = AGENT_TYPES[agentType]
+
+    // Get skin colors
+    const skinColors = useMemo(() => {
+        const skins = AGENT_SKINS[agentType]
+        if (!skins) return { primary: agent?.color || '#00ff88', secondary: '#333', glow: agent?.color || '#00ff88' }
+        const skin = skins.find(s => s.id === skinId) || skins[0]
+        return skin.colors
+    }, [agentType, skinId, agent?.color])
 
     // Walking animation
     useFrame((state) => {
@@ -123,8 +134,8 @@ export function Agent3D({
             <mesh ref={bodyRef} castShadow position={[0, 0.6, 0]}>
                 {geometry}
                 <meshStandardMaterial
-                    color={agent.color}
-                    emissive={agent.color}
+                    color={skinColors.primary}
+                    emissive={skinColors.glow}
                     emissiveIntensity={isSelected ? 0.6 : 0.3}
                     metalness={0.7}
                     roughness={0.2}
@@ -136,8 +147,8 @@ export function Agent3D({
             <mesh position={[0, 1.4, 0]} castShadow>
                 <sphereGeometry args={[0.25, 16, 16]} />
                 <meshStandardMaterial
-                    color={agent.color}
-                    emissive="#ffffff"
+                    color={skinColors.primary}
+                    emissive={skinColors.glow}
                     emissiveIntensity={0.2}
                     metalness={0.9}
                     roughness={0.1}
@@ -269,6 +280,205 @@ export function FloatingText({ position, text, color = '#FCEE0A', onComplete }: 
                     {text}
                 </div>
             </Html>
+        </group>
+    )
+}
+
+// Battle Agent with attack animations
+interface BattleAgent3DProps {
+    position: [number, number, number]
+    agentType: keyof typeof AGENT_TYPES
+    isPlayer: boolean
+    isAttacking: boolean
+    hp: number
+    maxHp: number
+}
+
+export function BattleAgent3D({
+    position,
+    agentType,
+    isPlayer,
+    isAttacking,
+    hp,
+    maxHp
+}: BattleAgent3DProps) {
+    const groupRef = useRef<THREE.Group>(null)
+    const bodyRef = useRef<THREE.Mesh>(null)
+    const attackTime = useRef(0)
+    const agent = AGENT_TYPES[agentType]
+
+    const baseColor = agent?.color || (isPlayer ? '#00FF88' : '#FF3366')
+    const hpRatio = hp / maxHp
+
+    useFrame((state, delta) => {
+        if (!groupRef.current || !bodyRef.current) return
+
+        const time = state.clock.elapsedTime
+
+        // Base idle animation - floating
+        const idleY = Math.sin(time * 3) * 0.05
+
+        if (isAttacking) {
+            attackTime.current += delta * 8
+
+            // Attack lunge towards enemy
+            const lungeOffset = Math.sin(attackTime.current * 3) * 2
+            const lungeDirection = isPlayer ? -1 : 1
+
+            groupRef.current.position.x = position[0] + lungeOffset * lungeDirection
+            groupRef.current.position.y = position[1] + idleY + Math.abs(Math.sin(attackTime.current * 4)) * 0.3
+            groupRef.current.position.z = position[2]
+
+            // Aggressive wobble during attack
+            bodyRef.current.rotation.z = Math.sin(time * 20) * 0.3
+            bodyRef.current.rotation.x = Math.sin(time * 15) * 0.2
+
+            // Scale pulse on attack
+            const scalePulse = 1 + Math.sin(attackTime.current * 6) * 0.15
+            bodyRef.current.scale.setScalar(scalePulse)
+        } else {
+            attackTime.current = 0
+
+            // Normal idle state
+            groupRef.current.position.x = position[0]
+            groupRef.current.position.y = position[1] + idleY
+            groupRef.current.position.z = position[2]
+
+            // Gentle idle sway
+            bodyRef.current.rotation.z = Math.sin(time * 2) * 0.05
+            bodyRef.current.rotation.x = 0
+            bodyRef.current.scale.setScalar(1)
+        }
+
+        // Face opponent
+        groupRef.current.rotation.y = isPlayer ? -Math.PI / 4 : Math.PI / 4 + Math.PI
+    })
+
+    // Geometry based on shape
+    const geometry = useMemo(() => {
+        if (!agent) return <capsuleGeometry args={[0.4, 1.5, 4, 8]} />
+        const shape = agent.shape
+        switch (shape) {
+            case 'angular':
+                return <coneGeometry args={[0.5, 1.5, 5]} />
+            case 'blocky':
+                return <boxGeometry args={[0.8, 1.5, 0.8]} />
+            case 'ethereal':
+                return <octahedronGeometry args={[0.6, 0]} />
+            case 'spiky':
+                return <coneGeometry args={[0.5, 1.5, 8]} />
+            case 'geometric':
+                return <dodecahedronGeometry args={[0.6]} />
+            case 'balanced':
+            default:
+                return <capsuleGeometry args={[0.4, 1.5, 4, 8]} />
+        }
+    }, [agent?.shape])
+
+    return (
+        <group ref={groupRef} position={position}>
+            {/* Main Body */}
+            <mesh ref={bodyRef} castShadow>
+                {geometry}
+                <meshStandardMaterial
+                    color={baseColor}
+                    emissive={baseColor}
+                    emissiveIntensity={isAttacking ? 1 : 0.3}
+                    metalness={0.3}
+                    roughness={0.7}
+                />
+            </mesh>
+
+            {/* HP indicator above */}
+            <group position={[0, 1.5, 0]}>
+                {/* HP bar background */}
+                <mesh position={[0, 0, 0]}>
+                    <boxGeometry args={[1.2, 0.12, 0.05]} />
+                    <meshBasicMaterial color="#000" />
+                </mesh>
+                {/* HP bar fill */}
+                <mesh position={[(hpRatio - 1) * 0.55, 0, 0.03]}>
+                    <boxGeometry args={[1.1 * hpRatio, 0.08, 0.05]} />
+                    <meshBasicMaterial color={hpRatio > 0.5 ? '#00FF88' : hpRatio > 0.25 ? '#FCEE0A' : '#FF3366'} />
+                </mesh>
+            </group>
+
+            {/* Attack effect particles */}
+            {isAttacking && (
+                <group>
+                    {[...Array(5)].map((_, i) => (
+                        <mesh key={i} position={[
+                            Math.sin(i * 72 * Math.PI / 180) * 0.8,
+                            Math.cos(i * 72 * Math.PI / 180) * 0.8 + 0.5,
+                            0.3
+                        ]}>
+                            <sphereGeometry args={[0.1]} />
+                            <meshBasicMaterial color={baseColor} transparent opacity={0.8} />
+                        </mesh>
+                    ))}
+                </group>
+            )}
+
+            {/* Player/Enemy glow ring */}
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.5, 0]}>
+                <ringGeometry args={[0.6, 0.8, 32]} />
+                <meshBasicMaterial
+                    color={isPlayer ? '#00FF88' : '#FF3366'}
+                    transparent
+                    opacity={isAttacking ? 0.8 : 0.4}
+                />
+            </mesh>
+
+            {/* Glow light */}
+            <pointLight
+                color={baseColor}
+                intensity={isAttacking ? 3 : 1}
+                distance={4}
+            />
+        </group>
+    )
+}
+
+// Attack effect burst
+export function AttackBurst({ position, color = '#FCEE0A' }: { position: [number, number, number], color?: string }) {
+    const ref = useRef<THREE.Group>(null)
+    const scaleRef = useRef(0.1)
+
+    useFrame((_, delta) => {
+        if (ref.current) {
+            scaleRef.current += delta * 8
+            ref.current.scale.setScalar(scaleRef.current)
+            ref.current.rotation.z += delta * 5
+
+            // Fade out
+            const opacity = Math.max(0, 1 - scaleRef.current / 3)
+            ref.current.children.forEach(child => {
+                if ((child as THREE.Mesh).material) {
+                    const mat = (child as THREE.Mesh).material as THREE.MeshBasicMaterial
+                    mat.opacity = opacity
+                }
+            })
+        }
+    })
+
+    if (scaleRef.current > 3) return null
+
+    return (
+        <group ref={ref} position={position}>
+            {[...Array(8)].map((_, i) => (
+                <mesh key={i} position={[
+                    Math.cos(i * 45 * Math.PI / 180) * 0.5,
+                    Math.sin(i * 45 * Math.PI / 180) * 0.5,
+                    0
+                ]}>
+                    <octahedronGeometry args={[0.15]} />
+                    <meshBasicMaterial color={color} transparent />
+                </mesh>
+            ))}
+            <mesh>
+                <ringGeometry args={[0.3, 0.5, 16]} />
+                <meshBasicMaterial color={color} transparent />
+            </mesh>
         </group>
     )
 }
