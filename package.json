@@ -12,6 +12,10 @@
   "devDependencies": {
     "turbo": "^2.0.0"
   },
+  "resolutions": {
+    "three": "0.182.0",
+    "@types/three": "0.182.0"
+  },
   "workspaces": [
     "apps/*",
     "packages/*"

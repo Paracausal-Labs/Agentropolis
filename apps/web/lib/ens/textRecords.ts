@@ -258,7 +258,7 @@ export async function writeAgentConfig(
         error.message.includes('not authorized') ||
         error.message.includes('caller is not authorized')
       ) {
-        throw new Error(`You do not own the ENS name "${ensName}"`)
+        throw new Error(`Ens does not belons to you "${ensName}"`)
       }
     }
     throw error
