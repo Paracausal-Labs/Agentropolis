@@ -13,6 +13,30 @@ import { TOKENS } from '../uniswap/constants'
 import { FEE_CONFIG } from '../clanker/constants'
 import type { StrategyContext } from './strategies'
 
+/**
+ * Sanitize user input to mitigate prompt injection attacks.
+ * Strips control characters, caps length, and neutralizes role impersonation.
+ */
+function sanitizeUserPrompt(prompt: string): string {
+  let cleaned = prompt
+    .replace(/[\x00-\x1F\x7F-\x9F]/g, '')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .trim()
+
+  const MAX_PROMPT_LENGTH = 2000
+  if (cleaned.length > MAX_PROMPT_LENGTH) {
+    cleaned = cleaned.substring(0, MAX_PROMPT_LENGTH)
+  }
+
+  cleaned = cleaned
+    .replace(/```/g, "'''")
+    .replace(/<\|.*?\|>/g, '')
+    .replace(/\bSystem:/gi, 'User said System:')
+    .replace(/\bAssistant:/gi, 'User said Assistant:')
+
+  return cleaned
+}
+
 interface AgentPersona {
   id: string
   name: string
@@ -88,18 +112,19 @@ export interface CouncilRequest {
   agentEndpoint?: string
 }
 
-// SSRF Protection: Allowed external API domains
+// SSRF Protection: Allowed external API domains (exact matches only)
 const ALLOWED_API_DOMAINS = [
-  'localhost',
-  '127.0.0.1',
   'api.openai.com',
   'api.groq.com',
   'api.anthropic.com',
   'generativelanguage.googleapis.com',
+]
+
+// Platform subdomains allowed (wildcard match on these base domains)
+const ALLOWED_PLATFORM_DOMAINS = [
   'vercel.app',
   'railway.app',
   'fly.dev',
-  'ngrok-free.app',
   'herokuapp.com',
 ]
 
@@ -110,6 +135,9 @@ const PRIVATE_IP_PATTERNS = [
   /^192\.168\.\d{1,3}\.\d{1,3}$/,             // 192.168.0.0/16
   /^169\.254\.\d{1,3}\.\d{1,3}$/,             // 169.254.0.0/16 (link-local)
   /^0\.0\.0\.0$/,                              // 0.0.0.0
+  /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/,         // 127.0.0.0/8 (loopback)
+  /^::1$/,                                      // IPv6 loopback
+  /^\[::1\]$/,                                  // IPv6 loopback (bracketed)
 ]
 
 const EXTERNAL_AGENT_TIMEOUT_MS = 10_000 // 10 seconds
@@ -124,34 +152,41 @@ function validateExternalEndpoint(endpoint: string): { valid: boolean; error?: s
   }
 
   const hostname = url.hostname.toLowerCase()
-  
-  // Check if hostname is a private IP
+
+  // Block private IPs (including loopback)
   for (const pattern of PRIVATE_IP_PATTERNS) {
     if (pattern.test(hostname)) {
       return { valid: false, error: 'Private IP addresses are not allowed' }
     }
   }
 
-  // Allow localhost without HTTPS requirement
+  // Allow localhost only in development
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return { valid: true }
+    if (process.env.NODE_ENV === 'development') {
+      return { valid: true }
+    }
+    return { valid: false, error: 'Localhost not allowed in production' }
   }
 
-  // For external hosts, require HTTPS
+  // For all external hosts, require HTTPS
   if (url.protocol !== 'https:') {
     return { valid: false, error: 'HTTPS required for external endpoints' }
   }
 
-  // Check allowlist
-  const isAllowed = ALLOWED_API_DOMAINS.some(domain => 
-    hostname === domain || hostname.endsWith('.' + domain)
-  )
-  
-  if (!isAllowed) {
-    return { valid: false, error: `Domain not in allowlist: ${hostname}` }
+  // Check exact API domain match
+  if (ALLOWED_API_DOMAINS.includes(hostname)) {
+    return { valid: true }
   }
 
-  return { valid: true }
+  // Check platform subdomain match (e.g., my-app.vercel.app)
+  const isPlatformAllowed = ALLOWED_PLATFORM_DOMAINS.some(domain =>
+    hostname.endsWith('.' + domain)
+  )
+  if (isPlatformAllowed) {
+    return { valid: true }
+  }
+
+  return { valid: false, error: `Domain not in allowlist: ${hostname}` }
 }
 
 async function callExternalAgent(
@@ -374,7 +409,7 @@ function buildAgentPrompt(
 
   return `${persona.systemPrompt}
 
-User's request: "${userPrompt}"
+User's request: "${sanitizeUserPrompt(userPrompt)}"
 
 User Context:
 - Current balance: ${context.balance || 'unknown'}
@@ -421,7 +456,7 @@ function buildTokenLaunchAgentPrompt(
 
   return `${persona.systemPrompt}
 
-User wants to launch a token: "${userPrompt}"
+User wants to launch a token: "${sanitizeUserPrompt(userPrompt)}"
 
 User Context:
 - Current balance: ${context.balance || 'unknown'}
@@ -458,7 +493,7 @@ function buildTokenLaunchClerkPrompt(
 
   return `You are the Council Clerk synthesizing a TOKEN LAUNCH proposal.
 
-User's request: "${userPrompt}"
+User's request: "${sanitizeUserPrompt(userPrompt)}"
 
 User Context:
 - Balance: ${context.balance || 'unknown'}
@@ -503,7 +538,7 @@ function buildClerkPrompt(
 
   return `You are the Council Clerk. Synthesize the council's discussion into a final actionable proposal.
 
-User's request: "${userPrompt}"
+User's request: "${sanitizeUserPrompt(userPrompt)}"
 
 User Context:
 - Balance: ${context.balance || 'unknown'}
@@ -556,7 +591,33 @@ async function callAgent(
   const content = completion.choices[0]?.message?.content
   if (!content) throw new Error(`Empty response from ${persona.name}`)
 
-  return JSON.parse(content)
+  const parsed: AgentResponse = JSON.parse(content)
+
+  // Validate and clamp LLM output
+  const validOpinions = ['SUPPORT', 'CONCERN', 'OPPOSE', 'NEUTRAL']
+  if (!validOpinions.includes(parsed.opinion)) {
+    parsed.opinion = 'NEUTRAL'
+  }
+  if (typeof parsed.confidence !== 'number' || parsed.confidence < 0 || parsed.confidence > 100) {
+    parsed.confidence = 50
+  }
+  if (parsed.suggestedStrategy?.amountIn) {
+    const amt = parseFloat(parsed.suggestedStrategy.amountIn)
+    if (isNaN(amt) || amt <= 0 || amt > 1_000_000) {
+      parsed.suggestedStrategy.amountIn = '0'
+    }
+  }
+  const validTokens = Object.keys(TOKENS)
+  if (parsed.suggestedStrategy?.tokenIn && !validTokens.includes(parsed.suggestedStrategy.tokenIn)) {
+    console.warn(`[Council] Agent suggested invalid tokenIn: ${parsed.suggestedStrategy.tokenIn}, defaulting to USDC`)
+    parsed.suggestedStrategy.tokenIn = 'USDC'
+  }
+  if (parsed.suggestedStrategy?.tokenOut && !validTokens.includes(parsed.suggestedStrategy.tokenOut)) {
+    console.warn(`[Council] Agent suggested invalid tokenOut: ${parsed.suggestedStrategy.tokenOut}, defaulting to WETH`)
+    parsed.suggestedStrategy.tokenOut = 'WETH'
+  }
+
+  return parsed
 }
 
 async function callClerk(groq: Groq, prompt: string): Promise<ClerkSynthesis> {
@@ -578,7 +639,38 @@ async function callClerk(groq: Groq, prompt: string): Promise<ClerkSynthesis> {
   const content = completion.choices[0]?.message?.content
   if (!content) throw new Error('Empty response from Clerk')
 
-  return JSON.parse(content)
+  const parsed: ClerkSynthesis = JSON.parse(content)
+
+  // Validate and clamp clerk output
+  const amountIn = parseFloat(parsed.amountIn)
+  if (isNaN(amountIn) || amountIn <= 0 || amountIn > 1_000_000) {
+    throw new Error(`Invalid amountIn from clerk: ${parsed.amountIn}`)
+  }
+  const amountOut = parseFloat(parsed.expectedAmountOut)
+  if (isNaN(amountOut) || amountOut < 0 || amountOut > 10_000_000) {
+    parsed.expectedAmountOut = '0'
+  }
+  if (typeof parsed.maxSlippage !== 'number' || parsed.maxSlippage < 0 || parsed.maxSlippage > 10_000) {
+    parsed.maxSlippage = 50
+  }
+  if (typeof parsed.confidence !== 'number' || parsed.confidence < 0 || parsed.confidence > 100) {
+    parsed.confidence = 50
+  }
+  const validRiskLevels = ['low', 'medium', 'high']
+  if (!validRiskLevels.includes(parsed.riskLevel)) {
+    parsed.riskLevel = 'medium'
+  }
+  const validTokens = Object.keys(TOKENS)
+  if (!validTokens.includes(parsed.tokenIn)) {
+    console.warn(`[Council] Clerk suggested invalid tokenIn: ${parsed.tokenIn}, defaulting to WETH`)
+    parsed.tokenIn = 'WETH'
+  }
+  if (!validTokens.includes(parsed.tokenOut)) {
+    console.warn(`[Council] Clerk suggested invalid tokenOut: ${parsed.tokenOut}, defaulting to USDC`)
+    parsed.tokenOut = 'USDC'
+  }
+
+  return parsed
 }
 
 async function callTokenLaunchClerk(groq: Groq, prompt: string): Promise<ClerkTokenSynthesis> {
@@ -910,7 +1002,7 @@ export async function runCouncilDeliberation(
   const { consensus, voteTally } = calculateConsensus(messages)
 
   const proposal: TradeProposal = {
-    id: `council-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    id: `council-${Date.now()}-${crypto.randomUUID().split('-')[0]}`,
     agentId: 'council',
     agentName: 'Council',
     pair: {
@@ -1039,7 +1131,7 @@ export async function runTokenLaunchDeliberation(
   const { consensus, voteTally } = calculateConsensus(messages)
 
   const proposal: TokenLaunchProposal = {
-    id: `launch-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    id: `launch-${Date.now()}-${crypto.randomUUID().split('-')[0]}`,
     agentId: 'council',
     agentName: 'Council',
     action: 'token_launch',
@@ -1151,4 +1243,4 @@ export async function updateHookParameters(params: HookParameters): Promise<void
   }
 }
 
-export { AGENT_PERSONAS, isTokenLaunchPrompt }
+export { AGENT_PERSONAS, isTokenLaunchPrompt, validateExternalEndpoint }
