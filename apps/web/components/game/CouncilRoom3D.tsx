@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Scene3D from './Scene3D'
 import { Agent3D } from './3d/Agents'
 import { COLORS, AGENT_TYPES, PRESET_PROMPTS } from '@/lib/game-constants'
@@ -10,6 +10,14 @@ interface ChatMessage {
     id: string
     sender: 'user' | 'agent'
     text: string
+}
+
+const BACKEND_TO_FRONTEND_AGENT: Record<string, keyof typeof AGENT_TYPES> = {
+    'alpha-hunter': 'alphaHunter',
+    'risk-sentinel': 'riskSentinel',
+    'macro-oracle': 'macroOracle',
+    'devils-advocate': 'devilsAdvocate',
+    'council-clerk': 'councilClerk',
 }
 
 export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
@@ -25,9 +33,15 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
     // Deliberation State
     const [currentPrompt, setCurrentPrompt] = useState('')
     const [isDeliberating, setIsDeliberating] = useState(false)
-    const [opinions, setOpinions] = useState<any[]>([])
+    const [opinions, setOpinions] = useState<{ agent: string; stance: string; reasoning: string; confidence?: number }[]>([])
     const [proposal, setProposal] = useState<any | null>(null)
     const [speakingAgent, setSpeakingAgent] = useState<string | null>(null)
+    const [error, setError] = useState<string | null>(null)
+    const abortRef = useRef<AbortController | null>(null)
+    const selectedAgentRef = useRef<string | null>(null)
+
+    useEffect(() => { selectedAgentRef.current = selectedAgent }, [selectedAgent])
+    useEffect(() => { return () => { abortRef.current?.abort() } }, [])
 
     // Handlers
     const handleAgentClick = (agentId: string) => {
@@ -52,82 +66,151 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
         }
     }
 
-    const handleSendMessage = (text: string) => {
-        if (!selectedAgent) return
+    const handleSendMessage = async (text: string) => {
+        const agent = selectedAgentRef.current
+        if (!agent) return
 
         const newHistory = [
-            ...(interactions[selectedAgent]?.chatHistory || []),
+            ...(interactions[agent]?.chatHistory || []),
             { id: Date.now().toString(), sender: 'user', text } as ChatMessage
         ]
 
-        // Mock Agent Response
-        setTimeout(() => {
-            const agentType = AGENT_TYPES[selectedAgent as keyof typeof AGENT_TYPES]
-            const responseText = `As a ${agentType.role}, I think "${text}" is interesting. ${agentType.catchphrase}`
+        setInteractions(prev => ({
+            ...prev,
+            [agent]: { ...prev[agent], chatHistory: newHistory }
+        }))
+
+        try {
+            const res = await fetch('/api/agents/council', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userPrompt: text }),
+            })
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({ message: 'Request failed' }))
+                throw new Error(err.message || `API error: ${res.status}`)
+            }
+
+            const data = await res.json()
+
+            const currentAgent = selectedAgentRef.current || agent
+            const frontendKey = currentAgent as keyof typeof AGENT_TYPES
+            const backendMessages = data.deliberation?.messages || []
+            const agentMsg = backendMessages.find((m: any) =>
+                BACKEND_TO_FRONTEND_AGENT[m.agentId] === frontendKey
+            )
+
+            const responseText = agentMsg
+                ? `[${agentMsg.opinion}] ${agentMsg.reasoning}`
+                : data.deliberation?.messages?.[0]?.reasoning || 'I need more context to respond.'
 
             setInteractions(prev => ({
                 ...prev,
-                [selectedAgent]: {
-                    ...prev[selectedAgent],
+                [agent]: {
+                    ...prev[agent],
                     chatHistory: [
                         ...newHistory,
                         { id: (Date.now() + 1).toString(), sender: 'agent', text: responseText } as ChatMessage
                     ]
                 }
             }))
-        }, 1000)
-
-        setInteractions(prev => ({
-            ...prev,
-            [selectedAgent]: { ...prev[selectedAgent], chatHistory: newHistory }
-        }))
+        } catch (err) {
+            const errorMsg = err instanceof Error ? err.message : 'Failed to get response'
+            setInteractions(prev => ({
+                ...prev,
+                [agent]: {
+                    ...prev[agent],
+                    chatHistory: [
+                        ...newHistory,
+                        { id: (Date.now() + 1).toString(), sender: 'agent', text: `[ERROR] ${errorMsg}` } as ChatMessage
+                    ]
+                }
+            }))
+        }
     }
 
     const handleConsult = async () => {
         if (!currentPrompt.trim()) return
 
+        abortRef.current?.abort()
+        const controller = new AbortController()
+        abortRef.current = controller
+
         setIsDeliberating(true)
         setOpinions([])
         setProposal(null)
+        setError(null)
         actions.startDeliberation()
 
-        // Mock Sequence
-        const activeAgents = ['alphaHunter', 'riskSentinel', 'macroOracle', 'devilsAdvocate', 'councilClerk']
+        try {
+            const res = await fetch('/api/agents/council', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userPrompt: currentPrompt }),
+                signal: controller.signal,
+            })
 
-        for (const agentId of activeAgents) {
-            await new Promise(r => setTimeout(r, 1500))
-            setSpeakingAgent(agentId)
-
-            const opinion = {
-                agent: agentId,
-                stance: Math.random() > 0.5 ? 'support' : 'concern',
-                reasoning: `My analysis of "${currentPrompt}" suggests ${Math.random() > 0.5 ? 'positive' : 'mixed'} outcomes.`
+            if (!res.ok) {
+                const errBody = await res.json().catch(() => ({ message: 'Request failed' }))
+                throw new Error(errBody.message || `API error: ${res.status}`)
             }
-            setOpinions(prev => [...prev, opinion])
-            await new Promise(r => setTimeout(r, 1000))
+
+            const data = await res.json()
+            const messages = data.deliberation?.messages || []
+            const apiProposal = data.proposal
+
+            for (const msg of messages) {
+                if (controller.signal.aborted) return
+
+                const frontendAgent = BACKEND_TO_FRONTEND_AGENT[msg.agentId] || msg.agentId
+                setSpeakingAgent(frontendAgent)
+
+                const opinion = {
+                    agent: frontendAgent,
+                    stance: msg.opinion.toLowerCase(),
+                    reasoning: msg.reasoning,
+                    confidence: msg.confidence,
+                }
+
+                setOpinions(prev => [...prev, opinion])
+                await new Promise(r => setTimeout(r, 1200))
+                setSpeakingAgent(null)
+                await new Promise(r => setTimeout(r, 300))
+            }
+
+            if (apiProposal) {
+                const uiProposal = {
+                    id: apiProposal.id || `prop-${Date.now()}`,
+                    action: apiProposal.action === 'token_launch'
+                        ? `Launch ${apiProposal.tokenSymbol}`
+                        : `${apiProposal.strategyType || apiProposal.action || 'swap'}`.toUpperCase(),
+                    inputToken: apiProposal.pair?.tokenIn?.symbol || apiProposal.pairedToken || 'ETH',
+                    outputToken: apiProposal.pair?.tokenOut?.symbol || apiProposal.tokenSymbol || 'USDC',
+                    inputAmount: apiProposal.amountIn || '0',
+                    expectedOutput: `${apiProposal.expectedAmountOut || '0'} ${apiProposal.pair?.tokenOut?.symbol || 'USDC'}`,
+                    slippage: (apiProposal.maxSlippage || 50) / 100,
+                    risk: apiProposal.riskLevel || 'medium',
+                    reasoning: apiProposal.reasoning || 'Council deliberation complete.',
+                    votes: data.deliberation?.voteTally || { support: 0, oppose: 0, abstain: 0 },
+                    consensus: data.deliberation?.consensus || 'contested',
+                    status: 'pending' as const,
+                    timestamp: Date.now(),
+                    _apiProposal: apiProposal,
+                }
+
+                setProposal(uiProposal)
+                actions.addProposal(uiProposal)
+            }
+        } catch (err) {
+            if ((err as Error).name === 'AbortError') return
+            const message = err instanceof Error ? err.message : 'Deliberation failed'
+            console.error('[CouncilRoom] Deliberation error:', err)
+            setError(message)
+        } finally {
+            setIsDeliberating(false)
             setSpeakingAgent(null)
         }
-
-        // Final Proposal
-        await new Promise(r => setTimeout(r, 500))
-        const newProposal = {
-            id: 'prop-' + Date.now(),
-            action: 'Execute Generated Strategy',
-            inputToken: 'ETH',
-            outputToken: 'USDC',
-            inputAmount: '0.1',
-            expectedOutput: '320 USDC',
-            slippage: 0.5,
-            risk: 'medium' as const,
-            reasoning: 'Council consensus achieved. Proceed with caution.',
-            votes: { support: 3, oppose: 1, abstain: 1 },
-            consensus: 'majority' as const,
-            status: 'pending' as const,
-            timestamp: Date.now()
-        }
-        setProposal(newProposal)
-        actions.addProposal(newProposal)
-        setIsDeliberating(false)
     }
 
     return (
@@ -314,9 +397,14 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
                     </div>
                 )}
 
-                {/* Bottom Center: Deliberation Controls */}
                 {!selectedAgent && !proposal && (
                     <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-full max-w-3xl pointer-events-auto">
+                        {error && (
+                            <div className="mb-2 bg-red-900/80 border border-red-500 p-3 text-red-200 text-sm flex justify-between items-center">
+                                <span>{error}</span>
+                                <button onClick={() => setError(null)} className="text-red-400 hover:text-white ml-4">✕</button>
+                            </div>
+                        )}
                         <div className="mb-2 flex gap-2 justify-center">
                             {PRESET_PROMPTS.map((p, i) => (
                                 <button
@@ -334,6 +422,7 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
                                     type="text"
                                     value={currentPrompt}
                                     onChange={(e) => setCurrentPrompt(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter' && currentPrompt.trim()) handleConsult() }}
                                     placeholder="Enter proposal for council deliberation..."
                                     className="flex-1 bg-transparent border-b border-[#FCEE0A]/50 px-4 py-2 text-[#FCEE0A] placeholder-gray-600 focus:outline-none focus:border-[#FCEE0A]"
                                     disabled={isDeliberating}
@@ -346,18 +435,25 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
                                     {isDeliberating ? 'DELIBERATING...' : 'CONVENE COUNCIL'}
                                 </button>
                             </div>
-                            {/* Speech Bubbles Overlay */}
                             {opinions.length > 0 && (
                                 <div className="absolute bottom-full left-0 w-full mb-4 space-y-2 px-4">
-                                    {opinions.slice(-3).map((op, i) => (
-                                        <div key={i} className="bg-black/80 border border-gray-700 p-3 rounded clip-corner-tr animate-in slide-in-from-bottom">
-                                            <div className="flex justify-between text-xs mb-1">
-                                                <span className={`${op.stance === 'support' ? 'text-green-500' : 'text-red-500'} font-bold uppercase`}>[{op.stance}]</span>
-                                                <span className="text-[#FCEE0A]">{AGENT_TYPES[op.agent as keyof typeof AGENT_TYPES].name}</span>
+                                    {opinions.slice(-3).map((op, i) => {
+                                        const stanceColor = op.stance === 'support' ? 'text-green-500'
+                                            : op.stance === 'neutral' ? 'text-blue-400'
+                                            : 'text-red-500'
+                                        return (
+                                            <div key={i} className="bg-black/80 border border-gray-700 p-3 rounded clip-corner-tr animate-in slide-in-from-bottom">
+                                                <div className="flex justify-between text-xs mb-1">
+                                                    <span className={`${stanceColor} font-bold uppercase`}>[{op.stance}]</span>
+                                                    <span className="text-[#FCEE0A]">
+                                                        {AGENT_TYPES[op.agent as keyof typeof AGENT_TYPES]?.name || op.agent}
+                                                        {op.confidence != null && <span className="text-gray-500 ml-2">{op.confidence}%</span>}
+                                                    </span>
+                                                </div>
+                                                <p className="text-gray-300 text-sm">{op.reasoning}</p>
                                             </div>
-                                            <p className="text-gray-300 text-sm">{op.reasoning}</p>
-                                        </div>
-                                    ))}
+                                        )
+                                    })}
                                 </div>
                             )}
                         </div>
@@ -399,11 +495,15 @@ function RoundTable() {
 
 function ProposalCard({ proposal, onResolve }: { proposal: any, onResolve: () => void }) {
     const { actions } = useGame()
+    const votes = proposal.votes || { support: 0, oppose: 0, abstain: 0 }
+    const totalVotes = votes.support + votes.oppose + votes.abstain
 
     const handleExecute = () => {
         actions.executeProposal(proposal.id)
         onResolve()
     }
+
+    const riskColor = proposal.risk === 'low' ? '#00FF00' : proposal.risk === 'high' ? '#FF0000' : '#FFA500'
 
     return (
         <div className="cyber-panel p-1 w-full max-w-2xl clip-corner-all animate-in zoom-in">
@@ -427,11 +527,26 @@ function ProposalCard({ proposal, onResolve }: { proposal: any, onResolve: () =>
                         <div className="text-gray-500 text-xs uppercase">Expected Output</div>
                         <div className="text-[#00FF00] font-mono font-bold">{proposal.expectedOutput}</div>
                     </div>
-                    <div className="bg-[#111] p-3 border-l-2 border-[#FF0000]">
+                    <div className="bg-[#111] p-3 border-l-2" style={{ borderColor: riskColor }}>
                         <div className="text-gray-500 text-xs uppercase">Risk</div>
-                        <div className="text-[#FF0000] font-mono font-bold uppercase">{proposal.risk}</div>
+                        <div className="font-mono font-bold uppercase" style={{ color: riskColor }}>{proposal.risk}</div>
                     </div>
                 </div>
+
+                {totalVotes > 0 && (
+                    <div className="mb-6">
+                        <div className="flex justify-between text-xs text-gray-500 mb-1">
+                            <span>SUPPORT: {votes.support}</span>
+                            <span>OPPOSE: {votes.oppose}</span>
+                            <span>ABSTAIN: {votes.abstain}</span>
+                        </div>
+                        <div className="h-2 bg-gray-800 rounded flex overflow-hidden">
+                            {votes.support > 0 && <div className="bg-green-500 h-full" style={{ width: `${(votes.support / totalVotes) * 100}%` }} />}
+                            {votes.oppose > 0 && <div className="bg-red-500 h-full" style={{ width: `${(votes.oppose / totalVotes) * 100}%` }} />}
+                            {votes.abstain > 0 && <div className="bg-gray-500 h-full" style={{ width: `${(votes.abstain / totalVotes) * 100}%` }} />}
+                        </div>
+                    </div>
+                )}
 
                 <div className="bg-[#222] p-4 text-gray-300 italic mb-8 border border-gray-700">
                     {'"'}{proposal.reasoning}{'"'}
