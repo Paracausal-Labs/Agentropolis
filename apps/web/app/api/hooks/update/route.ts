@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { timingSafeEqual } from 'crypto'
 import { createWalletClient, createPublicClient, http, type Address } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { baseSepolia } from 'viem/chains'
@@ -44,25 +45,107 @@ interface HookUpdateRequest {
   sentimentReason?: string
 }
 
+// Rate limiting for hook updates
+const hookRateLimits = new Map<string, { count: number; resetAt: number }>()
+const HOOK_RATE_LIMIT_WINDOW_MS = 60_000
+const HOOK_RATE_LIMIT_MAX = 5
+
+function checkHookRateLimit(caller: string): boolean {
+  const key = `hook:${caller}`
+  const now = Date.now()
+  const entry = hookRateLimits.get(key)
+
+  if (!entry || now >= entry.resetAt) {
+    hookRateLimits.set(key, { count: 1, resetAt: now + HOOK_RATE_LIMIT_WINDOW_MS })
+    return true
+  }
+
+  if (entry.count >= HOOK_RATE_LIMIT_MAX) {
+    return false
+  }
+
+  entry.count++
+  return true
+}
+
+function validateHookParams(body: HookUpdateRequest): { valid: boolean; error?: string } {
+  if (body.feeBps !== undefined) {
+    if (typeof body.feeBps !== 'number' || !Number.isInteger(body.feeBps) || body.feeBps < 10 || body.feeBps > 10_000) {
+      return { valid: false, error: 'feeBps must be an integer between 10 and 10000' }
+    }
+  }
+
+  if (body.maxSwapSize !== undefined) {
+    if (typeof body.maxSwapSize !== 'string') {
+      return { valid: false, error: 'maxSwapSize must be a numeric string' }
+    }
+    try {
+      const size = BigInt(body.maxSwapSize)
+      if (size <= 0n) {
+        return { valid: false, error: 'maxSwapSize must be positive' }
+      }
+      const MAX_REASONABLE = BigInt('1000000000000000000000000') // 1M ETH in wei
+      if (size > MAX_REASONABLE) {
+        return { valid: false, error: 'maxSwapSize exceeds maximum' }
+      }
+    } catch {
+      return { valid: false, error: 'maxSwapSize must be a valid integer string' }
+    }
+  }
+
+  if (body.sentimentScore !== undefined) {
+    if (typeof body.sentimentScore !== 'number' || !Number.isInteger(body.sentimentScore) || body.sentimentScore < -100 || body.sentimentScore > 100) {
+      return { valid: false, error: 'sentimentScore must be an integer between -100 and 100' }
+    }
+  }
+
+  if (body.sentimentReason !== undefined) {
+    if (typeof body.sentimentReason !== 'string') {
+      return { valid: false, error: 'sentimentReason must be a string' }
+    }
+    if (body.sentimentReason.length > 500) {
+      return { valid: false, error: 'sentimentReason must be 500 characters or fewer' }
+    }
+  }
+
+  return { valid: true }
+}
+
 export async function POST(request: Request) {
   try {
     const deployerKey = process.env.DEPLOYER_KEY
     if (!deployerKey) {
       return NextResponse.json(
-        { success: false, error: 'DEPLOYER_KEY not configured' },
+        { success: false, error: 'Server configuration error' },
         { status: 500 }
       )
     }
 
     const authHeader = request.headers.get('x-hook-auth')
-    if (authHeader !== process.env.HOOK_AUTH_SECRET) {
+    const secret = process.env.HOOK_AUTH_SECRET
+    if (!authHeader || !secret || authHeader.length !== secret.length || !timingSafeEqual(Buffer.from(authHeader), Buffer.from(secret))) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
       )
     }
 
+    if (!checkHookRateLimit(authHeader)) {
+      return NextResponse.json(
+        { success: false, error: 'Rate limit exceeded' },
+        { status: 429 }
+      )
+    }
+
     const body: HookUpdateRequest = await request.json()
+
+    const validation = validateHookParams(body)
+    if (!validation.valid) {
+      return NextResponse.json(
+        { success: false, error: validation.error },
+        { status: 400 }
+      )
+    }
     const account = privateKeyToAccount(deployerKey as `0x${string}`)
 
     const walletClient = createWalletClient({
@@ -133,7 +216,7 @@ export async function POST(request: Request) {
   } catch (err) {
     console.error('[Hooks] Update failed:', err)
     return NextResponse.json(
-      { success: false, error: err instanceof Error ? err.message : 'Unknown error' },
+      { success: false, error: 'Hook update failed' },
       { status: 500 }
     )
   }
