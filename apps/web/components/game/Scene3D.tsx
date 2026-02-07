@@ -1,7 +1,7 @@
 'use client'
 
 import { Canvas } from '@react-three/fiber'
-import { OrbitControls, PerspectiveCamera, Environment } from '@react-three/drei'
+import { OrbitControls, PerspectiveCamera } from '@react-three/drei'
 import { EffectComposer, Bloom } from '@react-three/postprocessing'
 import * as THREE from 'three'
 
@@ -68,9 +68,6 @@ export default function Scene3D({
 
                 {/* Atmosphere - Cyberpunk fog */}
                 <fog attach="fog" args={['#0a0a1a', 10, 50]} />
-
-                {/* Environment for reflections */}
-                <Environment preset="night" />
 
                 {/* Scene Content */}
                 {children}

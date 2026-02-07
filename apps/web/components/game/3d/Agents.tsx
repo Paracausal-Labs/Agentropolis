@@ -4,7 +4,6 @@ import { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { COLORS, AGENT_TYPES } from '@/lib/game-constants'
-import { AGENT_SKINS } from '@/lib/game-data'
 import { Html } from '@react-three/drei'
 
 interface Agent3DProps {
@@ -26,7 +25,7 @@ interface Agent3DProps {
 export function Agent3D({
     position,
     agentType,
-    skinId = 'default',
+    skinId: _skinId = 'default',
     isWalking = false,
     rotation = 0,
     scale = 1,
@@ -41,13 +40,11 @@ export function Agent3D({
     const bodyRef = useRef<THREE.Mesh>(null)
     const agent = AGENT_TYPES[agentType]
 
-    // Get skin colors
-    const skinColors = useMemo(() => {
-        const skins = AGENT_SKINS[agentType]
-        if (!skins) return { primary: agent?.color || '#00ff88', secondary: '#333', glow: agent?.color || '#00ff88' }
-        const skin = skins.find(s => s.id === skinId) || skins[0]
-        return skin.colors
-    }, [agentType, skinId, agent?.color])
+    const skinColors = useMemo(() => ({
+        primary: agent?.color || '#00ff88',
+        secondary: agent?.secondary || '#333',
+        glow: agent?.color || '#00ff88',
+    }), [agent?.color, agent?.secondary])
 
     // Walking animation
     useFrame((state) => {

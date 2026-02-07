@@ -80,8 +80,8 @@ export default function Home() {
 
           <div className="flex justify-center gap-8 text-sm text-[#00F0FF] font-mono border-t border-[#FCEE0A]/20 pt-4">
             <span className="animate-pulse"> [ STATUS: LIVE ] </span>
-            <span> [ NET: YELLOW ] </span>
-            <span> [ GAS: 0.00 ] </span>
+            <span> [ CHAIN: BASE SEPOLIA ] </span>
+            <span> [ SETTLEMENT: YELLOW ] </span>
           </div>
         </div>
 
@@ -114,13 +114,13 @@ export default function Home() {
         {/* Footer Stats */}
         <div className="absolute bottom-0 left-0 w-full border-t border-[#FCEE0A]/20 bg-black/80 backdrop-blur-md p-4">
           <div className="container mx-auto flex justify-between items-center text-xs text-[#666] uppercase tracking-widest font-mono">
-            <div>SYS.VER.2.0.4 // AGENTROPOLIS_CORE</div>
+            <div>AGENTROPOLIS // HACKMONEY 2026</div>
             <div className="flex gap-8 hidden md:flex">
-              <span><span className="text-[#FCEE0A]">ACTIVE_NODES:</span> 8,492</span>
-              <span><span className="text-[#FCEE0A]">TOTAL_VALUE:</span> $42.8M</span>
-              <span><span className="text-[#FCEE0A]">UPTIME:</span> 99.99%</span>
+              <span><span className="text-[#FCEE0A]">UNISWAP_V4:</span> HOOKS ACTIVE</span>
+              <span><span className="text-[#FCEE0A]">YELLOW_NET:</span> STATE CHANNELS</span>
+              <span><span className="text-[#FCEE0A]">COUNCIL:</span> MULTI-AGENT LLM</span>
             </div>
-            <div>SECURE_CONNECTION_ESTABLISHED</div>
+            <div>BASE_SEPOLIA_TESTNET</div>
           </div>
         </div>
 

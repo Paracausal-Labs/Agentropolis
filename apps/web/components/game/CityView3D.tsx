@@ -17,11 +17,9 @@ function GameLoop() {
 
 interface CityView3DProps {
     onEnterCouncil: () => void
-    onEnterTownHall?: () => void
-    onEnterBattle?: () => void
 }
 
-export default function CityView3D({ onEnterCouncil, onEnterTownHall, onEnterBattle }: CityView3DProps) {
+export default function CityView3D({ onEnterCouncil }: CityView3DProps) {
     const { state, actions } = useGame()
     const [showDeployEffect, setShowDeployEffect] = useState<[number, number, number] | null>(null)
     const [coins, setCoins] = useState<{ id: string, position: [number, number, number], type: 'bronze' | 'silver' | 'gold', collected: boolean }[]>([])
