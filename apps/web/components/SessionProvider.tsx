@@ -32,7 +32,7 @@ interface SessionContextValue {
   endSession: () => Promise<SettlementResult>
   chargeAction: (type: string, amount: string) => Promise<void>
   chargeAgentDeploy: () => Promise<TransferResult>
-  executeTransfer: (destination: string, amount: bigint) => Promise<TransferResult>
+  executeTransfer: (operationType: string, amount: bigint) => Promise<TransferResult>
   withdraw: (amount?: bigint) => Promise<WithdrawalResult>
   isLoading: boolean
 }
@@ -200,12 +200,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return result
   }, [manager, channelState.status, actionBalance])
 
-  const executeTransfer = useCallback(async (destination: string, amount: bigint): Promise<TransferResult> => {
+  const executeTransfer = useCallback(async (operationType: string, amount: bigint): Promise<TransferResult> => {
     if (!manager) {
       return { success: false, newBalance: BigInt(0), error: 'No manager' }
     }
 
-    const result = await manager.executeOffChainTransfer(destination, amount)
+    const result = await manager.executeOffChainTransfer(operationType, amount)
 
     if (result.success) {
       setActionBalance(result.newBalance)

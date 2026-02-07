@@ -1,8 +1,24 @@
 'use client'
 
 import { useState, useCallback, useEffect, createContext, useContext, ReactNode } from 'react'
-import type { PublicClient, WalletClient, Chain, Account, Transport } from 'viem'
-import { createNitroliteClient, connectToClearnode, isMockMode, NitroliteClient } from './client'
+import type { PublicClient, WalletClient, Chain, Account, Transport, Address, Hex } from 'viem'
+import {
+  createAppSessionMessage,
+  createSubmitAppStateMessage,
+  createCloseAppSessionMessage,
+  generateRequestId,
+  RPCMethod,
+  RPCProtocolVersion,
+  RPCAppStateIntent,
+} from '@erc7824/nitrolite'
+import type { MessageSigner } from '@erc7824/nitrolite'
+import {
+  createNitroliteClient,
+  connectAndAuth,
+  isMockMode,
+  NitroliteClient,
+  WebSocketRouter,
+} from './client'
 import { YELLOW_CONTRACTS, YELLOW_DEFAULTS, formatYtestUsd } from './constants'
 
 export type ChannelStatus = 
@@ -50,7 +66,7 @@ export interface ChannelManager {
   state: ChannelState
   deposit: (amount?: bigint) => Promise<string | null>
   createChannel: () => Promise<string | null>
-  executeOffChainTransfer: (destination: string, amount: bigint) => Promise<TransferResult>
+  executeOffChainTransfer: (operationType: string, amount: bigint) => Promise<TransferResult>
   closeChannel: () => Promise<SettlementResult>
   withdrawFromYellow: (amount?: bigint) => Promise<WithdrawalResult>
   getClient: () => NitroliteClient | null
@@ -65,7 +81,7 @@ const initialState: ChannelState = {
 function createMockChannelManager(): ChannelManager {
   let state: ChannelState = { ...initialState }
   let listeners = new Set<(state: ChannelState) => void>()
-  let transferLog: Array<{ destination: string; amount: bigint; timestamp: number }> = []
+  let transferLog: Array<{ operationType: string; amount: bigint; timestamp: number }> = []
 
   function setState(updates: Partial<ChannelState>) {
     state = { ...state, ...updates }
@@ -119,7 +135,7 @@ function createMockChannelManager(): ChannelManager {
       return channelId
     },
 
-    async executeOffChainTransfer(destination: string, amount: bigint): Promise<TransferResult> {
+    async executeOffChainTransfer(operationType: string, amount: bigint): Promise<TransferResult> {
       if (state.status !== 'active') {
         return { success: false, newBalance: state.balance, error: 'Channel not active' }
       }
@@ -132,20 +148,19 @@ function createMockChannelManager(): ChannelManager {
         return { success: false, newBalance: state.balance, error: 'Insufficient balance' }
       }
 
-      console.log(`[Yellow Mock] Off-chain transfer: ${formatYtestUsd(amount)} ytest.USD to ${destination}`)
-      
-      // Simulate slight delay for off-chain signing
+      console.log(`[Yellow Mock] Off-chain state update (${operationType}): ${formatYtestUsd(amount)} ytest.USD`)
+
       await new Promise(r => setTimeout(r, 100))
-      
+
       const newBalance = state.balance - amount
       const txId = `tx-${Date.now()}-${Math.random().toString(36).substring(7)}`
-      
-      transferLog.push({ destination, amount, timestamp: Date.now() })
-      
+
+      transferLog.push({ operationType, amount, timestamp: Date.now() })
+
       setState({ balance: newBalance })
-      
-      console.log(`[Yellow Mock] Transfer complete: txId=${txId}, newBalance=${formatYtestUsd(newBalance)}`)
-      
+
+      console.log(`[Yellow Mock] State update complete: txId=${txId}, newBalance=${formatYtestUsd(newBalance)}`)
+
       return { success: true, newBalance, txId }
     },
 
@@ -224,7 +239,11 @@ function createRealChannelManager(
   let state: ChannelState = { ...initialState }
   let client: NitroliteClient | null = null
   let clientPromise: Promise<NitroliteClient | null> | null = null
-  let ws: WebSocket | null = null
+  let router: WebSocketRouter | null = null
+  let messageSigner: MessageSigner | null = null
+  let brokerAddress: Address | null = null
+  let appSessionId: Hex | null = null
+  let stateVersion = 0
 
   function setState(updates: Partial<ChannelState>) {
     state = { ...state, ...updates }
@@ -232,16 +251,28 @@ function createRealChannelManager(
 
   async function ensureClient(): Promise<NitroliteClient> {
     if (client) return client
-    
+
     if (!clientPromise) {
       clientPromise = createNitroliteClient(publicClient, walletClient)
     }
-    
+
     client = await clientPromise
     if (!client) {
       throw new Error('Failed to create Nitrolite client')
     }
     return client
+  }
+
+  async function ensureAuthConnection(): Promise<{ router: WebSocketRouter; signer: MessageSigner; broker: Address }> {
+    if (router?.isOpen && messageSigner && brokerAddress) {
+      return { router, signer: messageSigner, broker: brokerAddress }
+    }
+
+    const connection = await connectAndAuth(walletClient)
+    router = connection.router
+    messageSigner = connection.messageSigner
+    brokerAddress = connection.brokerAddress
+    return { router, signer: messageSigner, broker: brokerAddress }
   }
 
   return {
@@ -254,7 +285,7 @@ function createRealChannelManager(
         console.log('[Yellow] Depositing:', formatYtestUsd(amount), 'ytest.USD')
 
         setState({ status: 'approving', error: undefined })
-        
+
         const allowance = await nitrolite.getTokenAllowance(YELLOW_CONTRACTS.YTEST_USD)
         if (allowance < amount) {
           await nitrolite.approveTokens(YELLOW_CONTRACTS.YTEST_USD, amount)
@@ -262,7 +293,7 @@ function createRealChannelManager(
         }
 
         setState({ status: 'depositing' })
-        
+
         const txHash = await nitrolite.deposit(YELLOW_CONTRACTS.YTEST_USD, amount)
         console.log('[Yellow] Deposit complete:', txHash)
 
@@ -289,65 +320,75 @@ function createRealChannelManager(
 
       try {
         setState({ status: 'connecting', error: undefined })
-        
-        ws = await connectToClearnode()
-        console.log('[Yellow] Connected to clearnode')
+
+        const { router: r, signer, broker } = await ensureAuthConnection()
+        console.log('[Yellow] Authenticated with clearnode')
 
         setState({ status: 'creating' })
 
-        const channelId = await new Promise<string>((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('Channel creation timeout')), 30000)
-          
-          ws!.onmessage = (event) => {
-            clearTimeout(timeout)
-            try {
-              const response = JSON.parse(event.data)
-              if (response.error) {
-                reject(new Error(response.error.message || 'Channel creation failed'))
-                return
-              }
-              const id = response.result?.channel_id || response.channel_id || `channel-${Date.now()}`
-              resolve(id)
-            } catch (e) {
-              reject(e)
-            }
-          }
+        const userAddress = walletClient.account.address
+        const reqId = generateRequestId()
 
-          const request = {
-            jsonrpc: '2.0',
-            id: Date.now(),
-            method: 'create_channel',
-            params: {
-              chain_id: 84532,
-              token: YELLOW_CONTRACTS.YTEST_USD,
-            }
-          }
-          ws!.send(JSON.stringify(request))
-        })
+        const appSessionMsg = await createAppSessionMessage(
+          signer,
+          {
+            definition: {
+              application: 'agentropolis/v1',
+              protocol: RPCProtocolVersion.NitroRPC_0_4,
+              participants: [userAddress as Hex, broker as Hex],
+              weights: [1, 1],
+              quorum: 2,
+              challenge: 0,
+              nonce: Date.now(),
+            },
+            allocations: [{
+              asset: YELLOW_CONTRACTS.YTEST_USD,
+              amount: state.depositAmount.toString(),
+              participant: userAddress,
+            }],
+          },
+          reqId,
+        )
 
-        console.log('[Yellow] Channel created:', channelId)
+        console.log('[Yellow] Sending create_app_session...')
+        const response = await r.send(appSessionMsg, reqId)
+
+        if (response.method === RPCMethod.Error) {
+          const errParams = response as unknown as { params?: { error?: string } }
+          throw new Error(errParams.params?.error ?? 'App session creation failed')
+        }
+
+        if (response.method !== RPCMethod.CreateAppSession) {
+          throw new Error(`Expected create_app_session response, got ${response.method}`)
+        }
+
+        const sessionParams = response as unknown as { params: { appSessionId: Hex; version: number } }
+        appSessionId = sessionParams.params.appSessionId
+        stateVersion = sessionParams.params.version
+
+        console.log('[Yellow] App session created:', appSessionId)
 
         setState({
           status: 'active',
-          channelId,
+          channelId: appSessionId,
         })
 
-        return channelId
+        return appSessionId
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Channel creation failed'
-        console.error('[Yellow] Channel error:', errorMessage)
+        const errorMessage = err instanceof Error ? err.message : 'App session creation failed'
+        console.error('[Yellow] App session error:', errorMessage)
         setState({ status: 'error', error: errorMessage })
-        
-        if (ws) {
-          ws.close()
-          ws = null
+
+        if (router) {
+          router.dispose()
+          router = null
         }
-        
+
         throw err
       }
     },
 
-    async executeOffChainTransfer(destination: string, amount: bigint): Promise<TransferResult> {
+    async executeOffChainTransfer(operationType: string, amount: bigint): Promise<TransferResult> {
       if (state.status !== 'active') {
         return { success: false, newBalance: state.balance, error: 'Channel not active' }
       }
@@ -360,40 +401,57 @@ function createRealChannelManager(
         return { success: false, newBalance: state.balance, error: 'Insufficient balance' }
       }
 
+      if (!appSessionId || !router?.isOpen || !messageSigner) {
+        return { success: false, newBalance: state.balance, error: 'No active app session' }
+      }
+
       try {
-        const nitrolite = await ensureClient()
-        
-        console.log(`[Yellow] Off-chain transfer: ${formatYtestUsd(amount)} ytest.USD to ${destination}`)
-
-        const clientWithTransfer = nitrolite as unknown as { 
-          transfer?: (params: { to: string; amount: bigint; token: string }) => Promise<{ txId?: string }> 
-        }
-        
-        if (!clientWithTransfer.transfer) {
-          console.error('[Yellow] Transfer method not available on client')
-          return { success: false, newBalance: state.balance, error: 'Transfer method not available' }
-        }
-
-        const transferResult = await clientWithTransfer.transfer({
-          to: destination,
-          amount,
-          token: YELLOW_CONTRACTS.YTEST_USD,
-        })
-
-        if (!transferResult || !transferResult.txId) {
-          console.error('[Yellow] Transfer returned invalid response')
-          return { success: false, newBalance: state.balance, error: 'Transfer returned invalid response' }
-        }
-
+        const userAddress = walletClient.account.address
         const newBalance = state.balance - amount
+        stateVersion += 1
+
+        console.log(`[Yellow] Submitting state update (${operationType}): ${formatYtestUsd(amount)} ytest.USD`)
+
+        const reqId = generateRequestId()
+        const submitMsg = await createSubmitAppStateMessage<typeof RPCProtocolVersion.NitroRPC_0_4>(
+          messageSigner,
+          {
+            app_session_id: appSessionId,
+            intent: RPCAppStateIntent.Operate,
+            version: stateVersion,
+            allocations: [{
+              asset: YELLOW_CONTRACTS.YTEST_USD,
+              amount: newBalance.toString(),
+              participant: userAddress,
+            }],
+            session_data: operationType,
+          },
+          reqId,
+        )
+
+        const response = await router.send(submitMsg, reqId)
+
+        if (response.method === RPCMethod.Error) {
+          const errParams = response as unknown as { params?: { error?: string } }
+          return { success: false, newBalance: state.balance, error: errParams.params?.error ?? 'State update failed' }
+        }
+
+        if (response.method !== RPCMethod.SubmitAppState) {
+          return { success: false, newBalance: state.balance, error: `Unexpected response: ${response.method}` }
+        }
+
+        const stateResponse = response as unknown as { params: { version: number } }
+        stateVersion = stateResponse.params.version
+
         setState({ balance: newBalance })
-        
-        console.log(`[Yellow] Transfer complete: txId=${transferResult.txId}, newBalance=${formatYtestUsd(newBalance)}`)
-        
-        return { success: true, newBalance, txId: transferResult.txId }
+
+        const txId = `${appSessionId}-v${stateVersion}`
+        console.log(`[Yellow] State update complete: txId=${txId}, newBalance=${formatYtestUsd(newBalance)}`)
+
+        return { success: true, newBalance, txId }
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Transfer failed'
-        console.error('[Yellow] Transfer error:', errorMessage)
+        const errorMessage = err instanceof Error ? err.message : 'State update failed'
+        console.error('[Yellow] State update error:', errorMessage)
         return { success: false, newBalance: state.balance, error: errorMessage }
       }
     },
@@ -406,66 +464,66 @@ function createRealChannelManager(
       try {
         setState({ status: 'closing', error: undefined })
 
-        console.log('[Yellow] Initiating close handshake for channel:', state.channelId)
+        console.log('[Yellow] Closing app session:', appSessionId)
 
         let settlementTxHash: string | undefined
 
-        if (state.channelId && ws) {
-          const closePromise = new Promise<string | undefined>((resolve) => {
-            const timeout = setTimeout(() => {
-              console.warn('[Yellow] Close channel RPC timeout')
-              resolve(undefined)
-            }, 10000)
-            
-            ws!.onmessage = (event) => {
-              clearTimeout(timeout)
-              try {
-                const response = JSON.parse(event.data)
-                resolve(response.result?.tx_hash || response.tx_hash)
-              } catch {
-                resolve(undefined)
-              }
-            }
+        if (appSessionId && router?.isOpen && messageSigner) {
+          const userAddress = walletClient.account.address
+          const reqId = generateRequestId()
 
-            const request = {
-              jsonrpc: '2.0',
-              id: Date.now(),
-              method: 'close_channel',
-              params: { channel_id: state.channelId }
-            }
-            console.log('[Yellow] Sending close_channel RPC')
-            ws!.send(JSON.stringify(request))
-          })
+          const closeMsg = await createCloseAppSessionMessage(
+            messageSigner,
+            {
+              app_session_id: appSessionId,
+              allocations: [{
+                asset: YELLOW_CONTRACTS.YTEST_USD,
+                amount: state.balance.toString(),
+                participant: userAddress,
+              }],
+            },
+            reqId,
+          )
 
-          settlementTxHash = await closePromise
-          console.log('[Yellow] Close RPC complete, txHash:', settlementTxHash)
+          console.log('[Yellow] Sending close_app_session...')
+          const response = await router.send(closeMsg, reqId, 10_000)
+
+          if (response.method === RPCMethod.CloseAppSession) {
+            const closeParams = response as unknown as { params: { appSessionId: Hex } }
+            settlementTxHash = closeParams.params.appSessionId
+            console.log('[Yellow] Close confirmed:', settlementTxHash)
+          } else if (response.method === RPCMethod.Error) {
+            const errParams = response as unknown as { params?: { error?: string } }
+            console.warn('[Yellow] Close error from server:', errParams.params?.error)
+          }
         }
 
-        if (ws) {
-          console.log('[Yellow] Closing WebSocket connection')
-          ws.close()
-          ws = null
+        if (router) {
+          router.dispose()
+          router = null
         }
 
         const finalBalance = state.balance
-        
+        appSessionId = null
+        stateVersion = 0
+
         setState({
           status: 'settled',
           channelId: undefined,
         })
 
-        console.log(`[Yellow] Settlement complete: txHash=${settlementTxHash}, finalBalance=${formatYtestUsd(finalBalance)}`)
+        console.log(`[Yellow] Settlement complete: ref=${settlementTxHash}, finalBalance=${formatYtestUsd(finalBalance)}`)
 
         return { success: true, txHash: settlementTxHash, finalBalance }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Channel close failed'
         console.error('[Yellow] Close error:', errorMessage)
-        
-        if (ws) {
-          ws.close()
-          ws = null
+
+        if (router) {
+          router.dispose()
+          router = null
         }
-        
+
         setState({ status: 'error', error: errorMessage })
         return { success: false, finalBalance: state.balance, error: errorMessage }
       }
@@ -473,7 +531,7 @@ function createRealChannelManager(
 
     async withdrawFromYellow(amount?: bigint): Promise<WithdrawalResult> {
       const withdrawAmount = amount ?? state.balance
-      
+
       if (state.status === 'active') {
         return { success: false, amount: BigInt(0), error: 'Must close channel before withdrawing' }
       }
@@ -488,7 +546,7 @@ function createRealChannelManager(
 
       try {
         const nitrolite = await ensureClient()
-        
+
         console.log(`[Yellow] Withdrawing ${formatYtestUsd(withdrawAmount)} from custody...`)
 
         const txHash = await nitrolite.withdrawal(YELLOW_CONTRACTS.YTEST_USD, withdrawAmount)
@@ -550,6 +608,7 @@ export async function depositToYellow(
   return txHash
 }
 
+/** @deprecated Use createChannelManager().createChannel() instead. */
 export async function createYellowChannel(
   _publicClient: PublicClient,
   _walletClient: WalletClient<Transport, Chain, Account>,
@@ -561,47 +620,15 @@ export async function createYellowChannel(
     return `channel-${Date.now()}`
   }
 
-  const ws = await connectToClearnode()
-
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      ws.close()
-      reject(new Error('Channel creation timeout'))
-    }, 30000)
-
-    ws.onmessage = (event) => {
-      clearTimeout(timeout)
-      ws.close()
-      try {
-        const response = JSON.parse(event.data)
-        if (response.error) {
-          reject(new Error(response.error.message || 'Channel creation failed'))
-          return
-        }
-        resolve(response.result?.channel_id || response.channel_id || `channel-${Date.now()}`)
-      } catch (e) {
-        reject(e)
-      }
-    }
-
-    const request = {
-      jsonrpc: '2.0',
-      id: Date.now(),
-      method: 'create_channel',
-      params: {
-        chain_id: 84532,
-        token: YELLOW_CONTRACTS.YTEST_USD,
-      }
-    }
-    ws.send(JSON.stringify(request))
-  })
+  console.warn('[Yellow] createYellowChannel is deprecated — use ChannelManager.createChannel()')
+  return null
 }
 
 interface YellowChannelContextValue {
   state: ChannelState
   deposit: (amount?: bigint) => Promise<string | null>
   createChannel: () => Promise<string | null>
-  executeOffChainTransfer: (destination: string, amount: bigint) => Promise<TransferResult>
+  executeOffChainTransfer: (operationType: string, amount: bigint) => Promise<TransferResult>
   closeChannel: () => Promise<SettlementResult>
   withdrawFromYellow: (amount?: bigint) => Promise<WithdrawalResult>
   isLoading: boolean
@@ -645,9 +672,9 @@ export function YellowChannelProvider({
     return result
   }, [manager])
 
-  const executeOffChainTransfer = useCallback(async (destination: string, amount: bigint): Promise<TransferResult> => {
+  const executeOffChainTransfer = useCallback(async (operationType: string, amount: bigint): Promise<TransferResult> => {
     if (!manager) return { success: false, newBalance: BigInt(0), error: 'No manager' }
-    const result = await manager.executeOffChainTransfer(destination, amount)
+    const result = await manager.executeOffChainTransfer(operationType, amount)
     setState(manager.state)
     return result
   }, [manager])
