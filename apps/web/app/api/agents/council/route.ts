@@ -8,11 +8,13 @@ import {
   isTokenLaunchPrompt,
   extractHookParameters,
   updateHookParameters,
+  validateExternalEndpoint,
   type CouncilRequest,
 } from '@/lib/agents/council'
 
 const RATE_LIMIT_WINDOW_MS = 60_000
-const RATE_LIMIT_MAX_REQUESTS = 5 // Lower limit for council (more expensive)
+const RATE_LIMIT_MAX_REQUESTS = 5
+const AUTH_RATE_LIMIT_MAX = 20
 
 const guestRateLimits = new Map<string, { count: number; resetAt: number }>()
 
@@ -72,6 +74,15 @@ export async function POST(request: NextRequest) {
     return response
   }
 
+  const userAddress = request.headers.get('X-User-Address') || 'anon'
+  const { allowed } = checkGuestRateLimit(`auth:${userAddress}`)
+  if (!allowed) {
+    return NextResponse.json(
+      { error: 'Rate limit exceeded' },
+      { status: 429 }
+    )
+  }
+
   return handleDeliberation(request)
 }
 
@@ -111,8 +122,13 @@ async function handleDeliberation(request: NextRequest): Promise<NextResponse> {
             key: 'com.agentropolis.endpoint',
           })
           if (endpoint) {
-            console.log(`[API] Resolved ENS endpoint for ${ensName}: ${endpoint}`)
-            councilRequest.agentEndpoint = endpoint
+            const validation = validateExternalEndpoint(endpoint)
+            if (validation.valid) {
+              console.log(`[API] Resolved ENS endpoint for ${ensName}: ${endpoint}`)
+              councilRequest.agentEndpoint = endpoint
+            } else {
+              console.warn(`[API] ENS endpoint blocked for ${ensName}: ${validation.error}`)
+            }
           }
         }
       } catch (err) {
@@ -131,7 +147,7 @@ async function handleDeliberation(request: NextRequest): Promise<NextResponse> {
     // Fire-and-forget: push council decisions to V4 hooks on-chain
     const riskLevel = (councilRequest.context.riskLevel ?? 'medium') as 'low' | 'medium' | 'high'
     const hookParams = extractHookParameters(result.deliberation, riskLevel)
-    updateHookParameters(hookParams).catch(() => {})
+    updateHookParameters(hookParams).catch(err => console.error('[Council->Hooks] Hook update failed:', err))
 
     return NextResponse.json({
       success: true,

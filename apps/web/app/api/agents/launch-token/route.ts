@@ -4,6 +4,7 @@ import { FEE_CONFIG } from '@/lib/clanker/constants'
 
 const RATE_LIMIT_WINDOW_MS = 60_000
 const RATE_LIMIT_MAX_REQUESTS = 3
+const AUTH_RATE_LIMIT_MAX = 10
 
 const guestRateLimits = new Map<string, { count: number; resetAt: number }>()
 
@@ -92,6 +93,15 @@ export async function POST(request: NextRequest) {
     response.headers.set('X-RateLimit-Limit', String(RATE_LIMIT_MAX_REQUESTS))
     response.headers.set('X-RateLimit-Remaining', String(remaining))
     return response
+  }
+
+  const userAddress = request.headers.get('X-User-Address') || 'anon'
+  const { allowed } = checkGuestRateLimit(`auth:${userAddress}`)
+  if (!allowed) {
+    return NextResponse.json(
+      { error: 'Rate limit exceeded' },
+      { status: 429 }
+    )
   }
 
   return handleLaunch(request)
