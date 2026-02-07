@@ -78,14 +78,18 @@ export default function GameComponent() {
   }, [])
 
   useEffect(() => {
-    window.agentropolis = {
-      chargeAgentDeploy: handleChargeAgentDeploy,
-      getBalance: () => state.balance,
-      isSessionActive: () => state.status === 'active',
+    if (process.env.NODE_ENV === 'development') {
+      window.agentropolis = {
+        chargeAgentDeploy: handleChargeAgentDeploy,
+        getBalance: () => state.balance,
+        isSessionActive: () => state.status === 'active',
+      }
     }
 
     return () => {
-      delete window.agentropolis
+      if (process.env.NODE_ENV === 'development') {
+        delete window.agentropolis
+      }
     }
   }, [handleChargeAgentDeploy, state.balance, state.status])
 
