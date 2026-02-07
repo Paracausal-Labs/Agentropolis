@@ -241,8 +241,9 @@ async function simulateSwap(
         args: [commands, [swapInput], BigInt(deadlineSeconds)],
         account,
       })
-    } catch {
-      // gas estimation can fail even when simulation succeeds
+    } catch (gasErr) {
+      console.warn('[executor] Gas estimation failed:', gasErr instanceof Error ? gasErr.message : 'unknown')
+      gasEstimate = 500_000n
     }
     return { ok: true, gasEstimate }
   } catch (err) {
@@ -272,16 +273,27 @@ export async function buildExecutionPlan(
   console.log(`[executor] Quote: ${quote.amountOut} out via ${poolKey.fee}bps pool`)
 
   // Compute minAmountOut from quote + slippage
-  const slippageBps = DEFAULT_SLIPPAGE_BPS
+  // Use proposal's maxSlippage if valid, otherwise fall back to default
+  let slippageBps = DEFAULT_SLIPPAGE_BPS
+  if (
+    proposal.maxSlippage !== undefined &&
+    Number.isInteger(proposal.maxSlippage) &&
+    proposal.maxSlippage > 0 &&
+    proposal.maxSlippage <= 10_000
+  ) {
+    slippageBps = proposal.maxSlippage
+  }
   const quoteOutWei = BigInt(quote.amountOutWei)
   const minAmountOut = quoteOutWei - (quoteOutWei * BigInt(slippageBps)) / 10_000n
 
-  // Compute deadline
+  // Compute deadline: at least 5 min, at most 30 min from now
   const nowSeconds = Math.floor(Date.now() / 1000)
   const proposalDeadline = proposal.deadline > 1_000_000_000_000
     ? Math.floor(proposal.deadline / 1000)
     : proposal.deadline
-  const deadlineSeconds = Math.max(proposalDeadline, nowSeconds + 300) // at least 5 min from now
+  const MIN_DEADLINE = nowSeconds + 300
+  const MAX_DEADLINE = nowSeconds + 1800
+  const deadlineSeconds = Math.max(MIN_DEADLINE, Math.min(proposalDeadline, MAX_DEADLINE))
 
   // Determine swap direction
   const zeroForOne = tokenIn.toLowerCase() === poolKey.currency0.toLowerCase()
@@ -416,11 +428,12 @@ export const executeSwap = async (
   })
 
   if (allowance < amountIn) {
+    const MAX_UINT256 = BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')
     const approvalHash = await walletClient.writeContract({
       address: tokenIn,
       abi: ERC20_ABI,
       functionName: 'approve',
-      args: [CONTRACTS.UNIVERSAL_ROUTER, amountIn],
+      args: [CONTRACTS.UNIVERSAL_ROUTER, MAX_UINT256],
       account,
       chain: walletClient.chain ?? null,
     })

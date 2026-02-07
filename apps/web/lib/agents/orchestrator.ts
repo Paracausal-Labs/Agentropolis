@@ -134,13 +134,49 @@ export async function generateProposal(request: ProposalRequest): Promise<TradeP
       throw new Error('Invalid proposal structure from LLM')
     }
 
+    // Validate action
+    const validActions = ['swap', 'rebalance', 'dca'] as const
+    if (!validActions.includes(parsed.action)) {
+      parsed.action = 'swap'
+    }
+
+    // Validate amountIn
+    const amountInNum = parseFloat(parsed.amountIn)
+    if (isNaN(amountInNum) || amountInNum <= 0 || amountInNum > 1_000_000) {
+      throw new Error(`Invalid amountIn from LLM: ${parsed.amountIn}`)
+    }
+
+    // Validate expectedAmountOut
+    if (parsed.expectedAmountOut) {
+      const expectedNum = parseFloat(parsed.expectedAmountOut)
+      if (isNaN(expectedNum) || expectedNum < 0 || expectedNum > 10_000_000) {
+        parsed.expectedAmountOut = '0'
+      }
+    }
+
+    // Validate maxSlippage (0-10000 bps)
+    if (typeof parsed.maxSlippage !== 'number' || parsed.maxSlippage < 0 || parsed.maxSlippage > 10_000) {
+      parsed.maxSlippage = 50
+    }
+
+    // Validate confidence (0-100)
+    if (typeof parsed.confidence !== 'number' || parsed.confidence < 0 || parsed.confidence > 100) {
+      parsed.confidence = 50
+    }
+
+    // Validate riskLevel
+    const validRiskLevels = ['low', 'medium', 'high'] as const
+    if (!validRiskLevels.includes(parsed.riskLevel)) {
+      parsed.riskLevel = 'medium'
+    }
+
     const tokenAddresses: Record<string, string> = {
       USDC: TOKENS.USDC,
       WETH: TOKENS.WETH,
     }
 
     const proposal: TradeProposal = {
-      id: `proposal-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id: `proposal-${Date.now()}-${crypto.randomUUID().split('-')[0]}`,
       agentId: request.agentId,
       agentName: request.agentProfile?.name || 'AI Trading Agent',
       pair: {

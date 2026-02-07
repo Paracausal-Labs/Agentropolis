@@ -2,42 +2,65 @@ import { NextRequest, NextResponse } from 'next/server'
 import { generateProposal, type ProposalRequest } from '@/lib/agents/orchestrator'
 
 const RATE_LIMIT_WINDOW_MS = 60_000
-const RATE_LIMIT_MAX_REQUESTS = 10
+const GUEST_RATE_LIMIT_MAX = 10
+const AUTH_RATE_LIMIT_MAX = 50
 
-const guestRateLimits = new Map<string, { count: number; resetAt: number }>()
+const rateLimits = new Map<string, { count: number; resetAt: number }>()
+// Async lock to prevent race conditions on concurrent requests
+// TODO: Replace with Redis or Vercel KV for production (in-memory doesn't work across serverless instances)
+const rateLimitLocks = new Map<string, Promise<void>>()
 
-function checkGuestRateLimit(sessionId: string): { allowed: boolean; remaining: number } {
-  const now = Date.now()
-  const entry = guestRateLimits.get(sessionId)
-
-  if (!entry || now >= entry.resetAt) {
-    guestRateLimits.set(sessionId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS })
-    return { allowed: true, remaining: RATE_LIMIT_MAX_REQUESTS - 1 }
+async function checkRateLimit(key: string, maxRequests: number): Promise<{ allowed: boolean; remaining: number }> {
+  // Wait for any existing lock on this key
+  const existingLock = rateLimitLocks.get(key)
+  if (existingLock) {
+    await existingLock
   }
 
-  if (entry.count >= RATE_LIMIT_MAX_REQUESTS) {
-    return { allowed: false, remaining: 0 }
-  }
+  // Create a new lock
+  let releaseLock: () => void
+  const lock = new Promise<void>((resolve) => {
+    releaseLock = resolve
+  })
+  rateLimitLocks.set(key, lock)
 
-  entry.count++
-  return { allowed: true, remaining: RATE_LIMIT_MAX_REQUESTS - entry.count }
+  try {
+    const now = Date.now()
+    const entry = rateLimits.get(key)
+
+    if (!entry || now >= entry.resetAt) {
+      rateLimits.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS })
+      return { allowed: true, remaining: maxRequests - 1 }
+    }
+
+    if (entry.count >= maxRequests) {
+      return { allowed: false, remaining: 0 }
+    }
+
+    entry.count++
+    return { allowed: true, remaining: maxRequests - entry.count }
+  } finally {
+    releaseLock!()
+    rateLimitLocks.delete(key)
+  }
 }
 
 function cleanupExpiredLimits() {
   const now = Date.now()
-  for (const [key, entry] of guestRateLimits.entries()) {
+  for (const [key, entry] of rateLimits.entries()) {
     if (now >= entry.resetAt) {
-      guestRateLimits.delete(key)
+      rateLimits.delete(key)
     }
   }
 }
 
 export async function POST(request: NextRequest) {
+  cleanupExpiredLimits()
+
   const guestSession = request.headers.get('X-Guest-Session')
 
   if (guestSession) {
-    cleanupExpiredLimits()
-    const { allowed, remaining } = checkGuestRateLimit(guestSession)
+    const { allowed, remaining } = await checkRateLimit(`guest:${guestSession}`, GUEST_RATE_LIMIT_MAX)
 
     if (!allowed) {
       return NextResponse.json(
@@ -45,7 +68,7 @@ export async function POST(request: NextRequest) {
         {
           status: 429,
           headers: {
-            'X-RateLimit-Limit': String(RATE_LIMIT_MAX_REQUESTS),
+            'X-RateLimit-Limit': String(GUEST_RATE_LIMIT_MAX),
             'X-RateLimit-Remaining': '0',
             'Retry-After': '60',
           },
@@ -54,9 +77,19 @@ export async function POST(request: NextRequest) {
     }
 
     const response = await handleProposal(request)
-    response.headers.set('X-RateLimit-Limit', String(RATE_LIMIT_MAX_REQUESTS))
+    response.headers.set('X-RateLimit-Limit', String(GUEST_RATE_LIMIT_MAX))
     response.headers.set('X-RateLimit-Remaining', String(remaining))
     return response
+  }
+
+  // Rate limit authenticated users too (higher limit)
+  const userAddress = request.headers.get('X-User-Address') || 'anon'
+  const { allowed } = await checkRateLimit(`auth:${userAddress}`, AUTH_RATE_LIMIT_MAX)
+  if (!allowed) {
+    return NextResponse.json(
+      { error: 'Rate limit exceeded' },
+      { status: 429 }
+    )
   }
 
   return handleProposal(request)

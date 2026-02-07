@@ -202,6 +202,22 @@ export async function writeAgentConfig(
     }
 
     if (config.agentEndpoint) {
+      // Validate URL before writing to ENS
+      try {
+        const endpointUrl = new URL(config.agentEndpoint)
+        if (endpointUrl.protocol !== 'http:' && endpointUrl.protocol !== 'https:') {
+          throw new Error('Only HTTP/HTTPS protocols allowed for agentEndpoint')
+        }
+        if (config.agentEndpoint.length > 200) {
+          throw new Error('Agent endpoint URL too long (max 200 characters)')
+        }
+      } catch (urlError) {
+        if (urlError instanceof TypeError) {
+          throw new Error('Invalid agent endpoint URL format')
+        }
+        throw urlError
+      }
+
       writes.push({
         key: TEXT_RECORD_KEYS.ENDPOINT,
         value: config.agentEndpoint,
