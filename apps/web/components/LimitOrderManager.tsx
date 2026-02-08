@@ -1,0 +1,85 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { PlaceOrderModal, type LimitOrder } from './PlaceOrderModal'
+import { placeLimitOrder, claimLimitOrder } from '../lib/uniswap/limit-orders'
+import { toast } from 'sonner'
+
+export function LimitOrderManager() {
+    const [isPlaceModalOpen, setIsPlaceModalOpen] = useState(false)
+
+    useEffect(() =\u003e {
+        // Listen for game events
+        if(typeof window === 'undefined') return
+
+    const handleClaim = async (event: Event) =\u003e {
+        const customEvent = event as CustomEvent
+      const orderId = customEvent.detail || (event as any).detail
+      
+      console.log('[LimitOrderManager] Claiming order:', orderId)
+
+    const result = await claimLimitOrder(orderId)
+
+    if (result.success) {
+        toast.success('Order claimed successfully!', {
+            description: `TxID: ${result.txHash?.slice(0, 10)}...`,
+        })
+    } else {
+        toast.error('Failed to claim order', {
+            description: result.error,
+        })
+    }
+}
+
+const handleShowDetails = (event: Event) =\u003e {
+    const customEvent = event as CustomEvent
+      const order = customEvent.detail as LimitOrder
+      
+      toast.info(`Order ${order.direction === 'buy' ? 'Buy' : 'Sell'} @ $${order.targetPrice}`, {
+    description: `Status: ${order.status}`,
+})
+    }
+
+window.addEventListener('claimLimitOrder' as any, handleClaim)
+window.addEventListener('showLimitOrderDetails' as any, handleShowDetails)
+
+return () =\u003e {
+    window.removeEventListener('claimLimitOrder' as any, handleClaim)
+    window.removeEventListener('showLimitOrderDetails' as any, handleShowDetails)
+}
+  }, [])
+
+const handlePlaceOrder = async (order: LimitOrder) =\u003e {
+    console.log('[LimitOrderManager] Placing order:', order)
+
+const result = await placeLimitOrder(order)
+
+if (result.success) {
+    toast.success('Trade Tower constructed!', {
+        description: 'Your limit order is now active in the city.',
+    })
+} else {
+    toast.error('Failed to place order', {
+        description: result.error || 'Unknown error',
+    })
+}
+  }
+
+return (
+\u003c\u003e
+{/* Button to open modal - can be placed in header or elsewhere */ }
+\u003cbutton
+onClick = {() =\u003e setIsPlaceModalOpen(true)}
+className = "fixed bottom-6 right-6 z-40 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold rounded-full shadow-lg transition-all flex items-center gap-2"
+\u003e
+        🏗️ Place Limit Order
+\u003c / button\u003e
+
+\u003cPlaceOrderModal
+isOpen = { isPlaceModalOpen }
+onClose = {() =\u003e setIsPlaceModalOpen(false)}
+onPlaceOrder = { handlePlaceOrder }
+    /\u003e
+\u003c /\u003e
+  )
+}
