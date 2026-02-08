@@ -1,6 +1,10 @@
+import 'server-only'
+
 import { createPublicClient, http } from 'viem'
 import { baseSepolia } from 'viem/chains'
 import type { AgentProfile } from '@agentropolis/shared'
+import { lookup } from 'dns/promises'
+import { isIP } from 'net'
 
 const BASE_SEPOLIA_RPC = 'https://sepolia.base.org'
 
@@ -72,10 +76,81 @@ function ipfsToGateway(uri: string): string {
   return uri
 }
 
+function isPrivateOrReservedIp(ip: string): boolean {
+  if (isIP(ip) === 4) {
+    const parts = ip.split('.').map((p) => Number(p))
+    if (parts.length !== 4 || parts.some((p) => Number.isNaN(p) || p < 0 || p > 255)) return true
+    const [a, b] = parts
+    if (a === 0) return true
+    if (a === 10) return true
+    if (a === 127) return true
+    if (a === 169 && b === 254) return true
+    if (a === 172 && b >= 16 && b <= 31) return true
+    if (a === 192 && b === 168) return true
+    if (a === 100 && b >= 64 && b <= 127) return true
+    if (a >= 224) return true
+    return false
+  }
+  if (isIP(ip) === 6) {
+    const lower = ip.toLowerCase()
+    if (lower === '::' || lower === '::1') return true
+    if (lower.startsWith('fc') || lower.startsWith('fd')) return true
+    if (lower.startsWith('fe8') || lower.startsWith('fe9') || lower.startsWith('fea') || lower.startsWith('feb')) return true
+    if (lower.startsWith('2001:db8:')) return true
+    return false
+  }
+  return true
+}
+
+async function hostnameResolvesPublic(hostname: string): Promise<boolean> {
+  if (isIP(hostname)) return !isPrivateOrReservedIp(hostname)
+  try {
+    const results = await lookup(hostname, { all: true, verbatim: true })
+    if (!results || results.length === 0) return false
+    return results.every((r) => !isPrivateOrReservedIp(r.address))
+  } catch {
+    return false
+  }
+}
+
+function parseDataJsonUri(uri: string): Record<string, unknown> | null {
+  if (!uri.startsWith('data:application/json')) return null
+  const comma = uri.indexOf(',')
+  if (comma === -1) return null
+
+  const meta = uri.slice(0, comma)
+  const data = uri.slice(comma + 1)
+
+  try {
+    const json = meta.includes(';base64')
+      ? Buffer.from(data, 'base64').toString('utf8')
+      : decodeURIComponent(data)
+    const parsed = JSON.parse(json)
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null
+  } catch {
+    return null
+  }
+}
+
 async function fetchMetadata(uri: string): Promise<Record<string, unknown>> {
   try {
+    const dataUri = parseDataJsonUri(uri)
+    if (dataUri) return dataUri
+
     const url = ipfsToGateway(uri)
-    const response = await fetch(url, { signal: AbortSignal.timeout(5000) })
+    const parsed = new URL(url)
+
+    if (parsed.protocol !== 'https:') {
+      throw new Error('Only https:// metadata URIs are allowed')
+    }
+    if (parsed.username || parsed.password) {
+      throw new Error('Credentialed metadata URIs are not allowed')
+    }
+
+    const ok = await hostnameResolvesPublic(parsed.hostname.toLowerCase())
+    if (!ok) throw new Error('Metadata URI resolves to a private/reserved IP')
+
+    const response = await fetch(url, { signal: AbortSignal.timeout(5000), redirect: 'error' })
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
     return await response.json()
   } catch (error) {

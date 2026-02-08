@@ -2,11 +2,6 @@
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@agentropolis/shared'],
-  api: {
-    bodyParser: {
-      sizeLimit: '100kb',
-    },
-  },
   webpack: (config) => {
     config.resolve.fallback = { fs: false, net: false, tls: false }
     config.externals.push(

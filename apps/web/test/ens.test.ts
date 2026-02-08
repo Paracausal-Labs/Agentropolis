@@ -1,5 +1,5 @@
 
-import { describe, it, expect, mock } from "bun:test";
+import { describe, it, expect } from "bun:test";
 import { parseAgentConfig, getDefaultAgentConfig } from "../lib/ens/textRecords";
 
 // Mocking the viem imports because we can't easily mock the network calls in this environment without complex setup

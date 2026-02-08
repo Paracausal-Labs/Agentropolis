@@ -9,7 +9,7 @@ import { MOCK_AGENTS, BUILDINGS_CONFIG, LAMP_POSITIONS, COIN_CONFIG, WALKING_PAT
 import { useGame } from '@/contexts/GameContext'
 
 import { useWriteContract, useWaitForTransactionReceipt, useAccount } from 'wagmi'
-import { IDENTITY_REGISTRY_ADDRESS, REGISTER_ABI, addUserAgentTokenId } from '@/lib/erc8004/client'
+import { IDENTITY_REGISTRY_ADDRESS, REGISTER_ABI, addUserAgentTokenId } from '@/lib/erc8004/browser'
 
 // Separate component for game logic loop inside Canvas
 function GameLoop() {
@@ -423,12 +423,6 @@ function AgentPanel({
                     localStorage.setItem(CUSTOM_AGENTS_KEY, JSON.stringify(updated))
                     return updated
                 })
-                
-                fetch('/api/agents/metadata', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ tokenId, metadata: fd })
-                }).catch(e => console.error('Failed to update metadata', e))
 
                 setIsCreating(false)
                 setFormData({ name: '', strategy: 'dca', riskTolerance: 'moderate', description: '' })
@@ -436,19 +430,27 @@ function AgentPanel({
         }
     }, [isSuccess, receipt, hash])
 
+    const toBase64Utf8 = (input: string) => {
+        try {
+            return btoa(unescape(encodeURIComponent(input)))
+        } catch {
+            return btoa(input)
+        }
+    }
+
     const handleRegister = async () => {
         if (!isConnected) return
-        
-        const tempId = Date.now()
-        
-        try {
-            await fetch('/api/agents/metadata', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tokenId: tempId, metadata: formData })
-            })
 
-            const metadataURI = `${window.location.origin}/api/agents/metadata?tokenId=${tempId}`
+        try {
+            const metadata = {
+                name: formData.name || `Agent ${Date.now()}`,
+                description: formData.description || 'Custom Agent registered via Agentropolis',
+                image: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjIwMCIgaGVpZ2h0PSIyMDAiIGZpbGw9IiMwMDAiLz48dGV4dCB4PSIxMDAiIHk9IjExMCIgZmlsbD0iI0ZDRUUwQSIgZm9udC1mYW1pbHk9Im1vbm9zcGFjZSIgZm9udC1zaXplPSIxNCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+QUdFTlQ8L3RleHQ+PC9zdmc+',
+                strategy: formData.strategy,
+                riskTolerance: formData.riskTolerance,
+                services: [],
+            }
+            const metadataURI = `data:application/json;base64,${toBase64Utf8(JSON.stringify(metadata))}`
             
             writeContract({
                 address: IDENTITY_REGISTRY_ADDRESS,
