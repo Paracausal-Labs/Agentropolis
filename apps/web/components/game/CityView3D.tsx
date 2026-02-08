@@ -28,8 +28,8 @@ export default function CityView3D({ onEnterCouncil }: CityView3DProps) {
     const [coins, setCoins] = useState<{ id: string, position: [number, number, number], type: 'bronze' | 'silver' | 'gold', collected: boolean }[]>([])
     const [visuals, setVisuals] = useState<{ id: number, position: [number, number, number], text: string, color: string }[]>([])
     const [hasMounted, setHasMounted] = useState(false)
+    const [showMarketplace, setShowMarketplace] = useState(false)
 
-    // Fix hydration mismatch
     useEffect(() => {
         setHasMounted(true)
     }, [])
@@ -181,9 +181,12 @@ export default function CityView3D({ onEnterCouncil }: CityView3DProps) {
                             ACTIVE_AGENTS: <span className="text-white font-bold">{state.deployedAgents.length}/6</span>
                         </span>
                         <div className="h-3 w-px bg-[#FCEE0A]/30"></div>
-                        <span className="text-[#00F0FF] animate-pulse">
-                            {'>'} CITY_OPERATIONS_NORMAL
-                        </span>
+                        <button
+                            onClick={() => setShowMarketplace(true)}
+                            className="text-[#00F0FF] uppercase tracking-wider hover:text-[#FCEE0A] transition-colors"
+                        >
+                            {'>'} AGENT_MARKETPLACE
+                        </button>
                     </div>
                     <div className="flex gap-3 items-center">
                         <span className="text-gray-500">XP:</span>
@@ -195,11 +198,7 @@ export default function CityView3D({ onEnterCouncil }: CityView3DProps) {
                 </div>
             </div>
 
-            {/* Hover Trap for Buildings */}
-            <div
-                className="absolute inset-0 pointer-events-none"
-                style={{ display: 'none' }} // Actually handled by 3D events, but could add UI tooltips here
-            />
+            {showMarketplace && <AgentMarketplace onClose={() => setShowMarketplace(false)} />}
         </div>
     )
 }
@@ -276,6 +275,92 @@ function WalkingAgentWrapper({ agent, onPosUpdate }: { agent: any, onPosUpdate: 
             showNameTag
             isHovered // Keep name tag mostly visible for effect
         />
+    )
+}
+
+interface RegistryAgent {
+    agentId: number
+    name: string
+    description: string
+    image: string
+    strategy: string
+    riskTolerance: string
+    reputation?: number
+    registrySource: string
+}
+
+function AgentMarketplace({ onClose }: { onClose: () => void }) {
+    const [agents, setAgents] = useState<RegistryAgent[]>([])
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        fetch('/api/agents/list')
+            .then(res => res.json())
+            .then(data => { setAgents(data); setLoading(false) })
+            .catch(() => setLoading(false))
+    }, [])
+
+    return (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+            <div className="w-[600px] max-h-[80vh] bg-[#050510] border border-[#FCEE0A]/40 overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-3 bg-[#FCEE0A]/10 border-b border-[#FCEE0A]/30">
+                    <div>
+                        <h2 className="text-lg font-black text-[#FCEE0A] uppercase tracking-widest">AGENT_REGISTRY</h2>
+                        <p className="text-[10px] text-gray-400 font-mono uppercase tracking-wider">ERC-8004 ON-CHAIN REGISTRY // BASE SEPOLIA</p>
+                    </div>
+                    <button onClick={onClose} className="text-gray-400 hover:text-[#FCEE0A] text-xl font-bold transition-colors">
+                        ✕
+                    </button>
+                </div>
+
+                <div className="overflow-y-auto max-h-[calc(80vh-60px)] p-4 space-y-3 custom-scrollbar">
+                    {loading ? (
+                        <div className="text-center py-8">
+                            <span className="text-[#00F0FF] font-mono text-sm animate-pulse">QUERYING ON-CHAIN REGISTRY...</span>
+                        </div>
+                    ) : agents.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500 font-mono text-sm">NO AGENTS FOUND</div>
+                    ) : (
+                        agents.map(agent => (
+                            <div key={agent.agentId} className="bg-black/60 border border-[#FCEE0A]/20 p-4 hover:border-[#FCEE0A]/50 transition-all">
+                                <div className="flex gap-4">
+                                    <img
+                                        src={agent.image}
+                                        alt={agent.name}
+                                        className="w-16 h-16 object-cover border border-[#FCEE0A]/30"
+                                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                                    />
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <h3 className="font-bold text-white text-sm uppercase font-mono tracking-wider">{agent.name}</h3>
+                                            <span className="text-[8px] bg-[#00FF88]/20 text-[#00FF88] px-1.5 py-0.5 border border-[#00FF88]/30 font-mono uppercase">
+                                                {agent.registrySource}
+                                            </span>
+                                            <a
+                                                href={`https://sepolia.basescan.org/token/0x8004A818BFB912233c491871b3d84c89A494BD9e?a=${agent.agentId}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-[8px] bg-[#00F0FF]/20 text-[#00F0FF] px-1.5 py-0.5 border border-[#00F0FF]/30 font-mono hover:bg-[#00F0FF]/40 transition-colors"
+                                            >
+                                                #{agent.agentId}
+                                            </a>
+                                        </div>
+                                        <p className="text-[11px] text-gray-400 mb-2 leading-relaxed">{agent.description}</p>
+                                        <div className="flex gap-3 text-[10px] font-mono">
+                                            <span className="text-[#FCEE0A]">STRATEGY: <span className="text-white">{agent.strategy?.toUpperCase()}</span></span>
+                                            <span className="text-[#FCEE0A]">RISK: <span className="text-white">{agent.riskTolerance?.toUpperCase()}</span></span>
+                                            {agent.reputation !== undefined && (
+                                                <span className="text-[#FCEE0A]">REP: <span className="text-white">{agent.reputation}/100</span></span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            </div>
+        </div>
     )
 }
 
