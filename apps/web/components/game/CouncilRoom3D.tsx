@@ -365,89 +365,95 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
                     </div>
                 )}
 
-                {/* Right Panel: Chat or Intro */}
-                {selectedAgent && (
-                    <div className="absolute top-4 right-4 bottom-24 w-96 bg-black/90 border-l border-[#FCEE0A] pointer-events-auto flex flex-col clip-corner-bl transition-all animate-in slide-in-from-right">
-                        {interactions[selectedAgent]?.hasIntroduced ? (
-                            // Chat Interface
-                            <div className="flex flex-col h-full">
-                                <div className="p-4 border-b border-[#FCEE0A]/30 flex justify-between items-center bg-[#FCEE0A]/10">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                                        <span className="font-bold text-[#FCEE0A] uppercase tracking-wider">{AGENT_TYPES[selectedAgent as keyof typeof AGENT_TYPES].name}</span>
-                                    </div>
-                                    <button onClick={() => setSelectedAgent(null)} className="text-gray-500 hover:text-white">✕</button>
-                                </div>
-                                <div className="flex-1 p-4 overflow-y-auto space-y-4">
-                                    {interactions[selectedAgent].chatHistory.map(msg => (
-                                        <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                            <div className={`max-w-[80%] p-3 text-sm ${msg.sender === 'user' ? 'bg-[#FCEE0A]/20 text-white border border-[#FCEE0A]/50 clip-corner-br' : 'bg-gray-800 text-gray-200 border border-gray-700 clip-corner-bl'}`}>
-                                                {msg.text}
+                {/* Right Panel: Chat, Intro, or Deliberation Transcript */}
+                {(selectedAgent || opinions.length > 0) && (
+                    <div className="absolute top-4 right-4 bottom-24 w-96 pointer-events-auto flex flex-col transition-all animate-in slide-in-from-right z-10">
+                        {selectedAgent ? (
+                            <div className="w-full h-full bg-black/90 border-l border-[#FCEE0A] clip-corner-bl flex flex-col">
+                                {interactions[selectedAgent]?.hasIntroduced ? (
+                                    // Chat Interface
+                                    <div className="flex flex-col h-full">
+                                        <div className="p-4 border-b border-[#FCEE0A]/30 flex justify-between items-center bg-[#FCEE0A]/10">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                                                <span className="font-bold text-[#FCEE0A] uppercase tracking-wider">{AGENT_TYPES[selectedAgent as keyof typeof AGENT_TYPES].name}</span>
+                                            </div>
+                                            <button onClick={() => setSelectedAgent(null)} className="text-gray-500 hover:text-white">✕</button>
+                                        </div>
+                                        <div className="flex-1 p-4 overflow-y-auto space-y-4">
+                                            {interactions[selectedAgent].chatHistory.map(msg => (
+                                                <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                                    <div className={`max-w-[80%] p-3 text-sm ${msg.sender === 'user' ? 'bg-[#FCEE0A]/20 text-white border border-[#FCEE0A]/50 clip-corner-br' : 'bg-gray-800 text-gray-200 border border-gray-700 clip-corner-bl'}`}>
+                                                        {msg.text}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {interactions[selectedAgent].chatHistory.length === 0 && (
+                                                <div className="mt-8 space-y-2">
+                                                    <div className="text-center text-gray-500 text-xs mb-4">SUGGESTED QUERIES</div>
+                                                    {PRESET_PROMPTS.map((prompt, i) => (
+                                                        <button
+                                                            key={i}
+                                                            onClick={() => handleSendMessage(prompt.prompt)}
+                                                            className="w-full text-left p-2 bg-[#FCEE0A]/5 border border-[#FCEE0A]/20 text-[#FCEE0A] text-xs hover:bg-[#FCEE0A]/20 transition-colors"
+                                                        >
+                                                            {prompt.emoji} {prompt.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="p-4 border-t border-gray-800">
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Transmission contents..."
+                                                    className="flex-1 bg-black border border-gray-700 p-2 text-sm text-white focus:border-[#FCEE0A] outline-none"
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            handleSendMessage((e.target as HTMLInputElement).value);
+                                                            (e.target as HTMLInputElement).value = '';
+                                                        }
+                                                    }}
+                                                />
+                                                <button className="px-3 bg-[#FCEE0A] text-black font-bold text-sm hover:bg-white transition-colors">
+                                                    SEND
+                                                </button>
                                             </div>
                                         </div>
-                                    ))}
-                                    {interactions[selectedAgent].chatHistory.length === 0 && (
-                                        <div className="mt-8 space-y-2">
-                                            <div className="text-center text-gray-500 text-xs mb-4">SUGGESTED QUERIES</div>
-                                            {PRESET_PROMPTS.map((prompt, i) => (
-                                                <button
-                                                    key={i}
-                                                    onClick={() => handleSendMessage(prompt.prompt)}
-                                                    className="w-full text-left p-2 bg-[#FCEE0A]/5 border border-[#FCEE0A]/20 text-[#FCEE0A] text-xs hover:bg-[#FCEE0A]/20 transition-colors"
-                                                >
-                                                    {prompt.emoji} {prompt.label}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="p-4 border-t border-gray-800">
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="text"
-                                            placeholder="Transmission contents..."
-                                            className="flex-1 bg-black border border-gray-700 p-2 text-sm text-white focus:border-[#FCEE0A] outline-none"
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter') {
-                                                    handleSendMessage((e.target as HTMLInputElement).value);
-                                                    (e.target as HTMLInputElement).value = '';
-                                                }
-                                            }}
-                                        />
-                                        <button className="px-3 bg-[#FCEE0A] text-black font-bold text-sm hover:bg-white transition-colors">
-                                            SEND
-                                        </button>
                                     </div>
-                                </div>
+                                ) : (
+                                    // Introduction Panel
+                                    <div className="p-8 flex flex-col h-full justify-center text-center">
+                                        <div className="text-6xl mb-6">{AGENT_TYPES[selectedAgent as keyof typeof AGENT_TYPES].emoji}</div>
+                                        <h2 className="text-3xl font-black text-white uppercase mb-2 tracking-widest">
+                                            {AGENT_TYPES[selectedAgent as keyof typeof AGENT_TYPES].name}
+                                        </h2>
+                                        <h3 className="text-[#00F0FF] font-mono text-sm mb-6 tracking-wider">
+                                            STATUS: ONLINE
+                                        </h3>
+                                        <p className="text-gray-300 italic mb-8 border-l-2 border-[#FCEE0A] pl-4 text-left">
+                                            {'"'}{AGENT_TYPES[selectedAgent as keyof typeof AGENT_TYPES].catchphrase}{'"'}
+                                        </p>
+                                        <div className="space-y-4">
+                                            <button
+                                                onClick={handleStartChat}
+                                                className="w-full btn-cyber h-12"
+                                            >
+                                                ESTABLISH UPLINK
+                                            </button>
+                                            <button
+                                                onClick={() => setSelectedAgent(null)}
+                                                className="w-full text-gray-500 text-xs hover:text-white uppercase tracking-widest"
+                                            >
+                                                Terminate Connection
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         ) : (
-                            // Introduction Panel
-                            <div className="p-8 flex flex-col h-full justify-center text-center">
-                                <div className="text-6xl mb-6">{AGENT_TYPES[selectedAgent as keyof typeof AGENT_TYPES].emoji}</div>
-                                <h2 className="text-3xl font-black text-white uppercase mb-2 tracking-widest">
-                                    {AGENT_TYPES[selectedAgent as keyof typeof AGENT_TYPES].name}
-                                </h2>
-                                <h3 className="text-[#00F0FF] font-mono text-sm mb-6 tracking-wider">
-                                    STATUS: ONLINE
-                                </h3>
-                                <p className="text-gray-300 italic mb-8 border-l-2 border-[#FCEE0A] pl-4 text-left">
-                                    {'"'}{AGENT_TYPES[selectedAgent as keyof typeof AGENT_TYPES].catchphrase}{'"'}
-                                </p>
-                                <div className="space-y-4">
-                                    <button
-                                        onClick={handleStartChat}
-                                        className="w-full btn-cyber h-12"
-                                    >
-                                        ESTABLISH UPLINK
-                                    </button>
-                                    <button
-                                        onClick={() => setSelectedAgent(null)}
-                                        className="w-full text-gray-500 text-xs hover:text-white uppercase tracking-widest"
-                                    >
-                                        Terminate Connection
-                                    </button>
-                                </div>
-                            </div>
+                            <DeliberationTranscript opinions={opinions} />
                         )}
                     </div>
                 )}
@@ -490,27 +496,6 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
                                     {isDeliberating ? 'DELIBERATING...' : 'CONVENE COUNCIL'}
                                 </button>
                             </div>
-                            {opinions.length > 0 && (
-                                <div className="absolute bottom-full left-0 w-full mb-4 space-y-2 px-4">
-                                    {opinions.slice(-3).map((op, i) => {
-                                        const stanceColor = op.stance === 'support' ? 'text-green-500'
-                                            : op.stance === 'neutral' ? 'text-blue-400'
-                                            : 'text-red-500'
-                                        return (
-                                            <div key={i} className="bg-black/80 border border-gray-700 p-3 rounded clip-corner-tr animate-in slide-in-from-bottom">
-                                                <div className="flex justify-between text-xs mb-1">
-                                                    <span className={`${stanceColor} font-bold uppercase`}>[{op.stance}]</span>
-                                                    <span className="text-[#FCEE0A]">
-                                                        {AGENT_TYPES[op.agent as keyof typeof AGENT_TYPES]?.name || op.agent}
-                                                        {op.confidence != null && <span className="text-gray-500 ml-2">{op.confidence}%</span>}
-                                                    </span>
-                                                </div>
-                                                <p className="text-gray-300 text-sm">{op.reasoning}</p>
-                                            </div>
-                                        )
-                                    })}
-                                </div>
-                            )}
                         </div>
                     </div>
                 )}
@@ -518,7 +503,7 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
                 {/* Proposal Result Card */}
                 {proposal && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm pointer-events-auto z-50">
-                        <ProposalCard proposal={proposal} onResolve={() => { setProposal(null); setOpinions([]) }} />
+                        <ProposalCard proposal={proposal} opinions={opinions} onResolve={() => { setProposal(null); setOpinions([]) }} />
                     </div>
                 )}
             </div>
@@ -548,11 +533,12 @@ function RoundTable() {
 }
 
 
-function ProposalCard({ proposal, onResolve }: { proposal: any, onResolve: () => void }) {
+function ProposalCard({ proposal, opinions, onResolve }: { proposal: any, opinions: any[], onResolve: () => void }) {
     const { actions } = useGame()
     const { execute } = useStrategyExecutor()
     const [executing, setExecuting] = useState(false)
     const [swapResult, setSwapResult] = useState<{ status: string; txHash?: string; error?: string } | null>(null)
+    const [showDeliberation, setShowDeliberation] = useState(false)
     const votes = proposal.votes || { support: 0, oppose: 0, abstain: 0 }
     const totalVotes = votes.support + votes.oppose + votes.abstain
 
@@ -586,8 +572,8 @@ function ProposalCard({ proposal, onResolve }: { proposal: any, onResolve: () =>
     const riskColor = proposal.risk === 'low' ? '#00FF00' : proposal.risk === 'high' ? '#FF0000' : '#FFA500'
 
     return (
-        <div className="cyber-panel p-1 w-full max-w-2xl clip-corner-all animate-in zoom-in">
-            <div className="bg-[#050510] p-8 clip-corner-all border border-[#FCEE0A]/30">
+        <div className="cyber-panel p-1 w-full max-w-2xl clip-corner-all animate-in zoom-in flex flex-col max-h-[90vh]">
+            <div className="bg-[#050510] p-8 clip-corner-all border border-[#FCEE0A]/30 overflow-y-auto custom-scrollbar">
                 <div className="flex justify-between items-start mb-6">
                     <div>
                         <div className="text-[#FCEE0A] text-xs font-mono uppercase tracking-widest">FINAL CONSENSUS</div>
@@ -628,8 +614,42 @@ function ProposalCard({ proposal, onResolve }: { proposal: any, onResolve: () =>
                     </div>
                 )}
 
-                <div className="bg-[#222] p-4 text-gray-300 italic mb-8 border border-gray-700">
+                <div className="bg-[#222] p-4 text-gray-300 italic mb-6 border border-gray-700">
                     {'"'}{proposal.reasoning}{'"'}
+                </div>
+
+                {/* Deliberation Transcript Toggle */}
+                <div className="mb-8 border border-gray-800 bg-[#111]">
+                    <button 
+                        onClick={() => setShowDeliberation(!showDeliberation)}
+                        className="w-full flex justify-between items-center p-3 hover:bg-gray-800 transition-colors"
+                    >
+                        <span className="text-[#FCEE0A] text-xs font-mono uppercase tracking-widest">
+                            {showDeliberation ? 'Hide' : 'View'} Full Deliberation ({opinions.length})
+                        </span>
+                        <span className="text-[#FCEE0A]">{showDeliberation ? '▲' : '▼'}</span>
+                    </button>
+                    
+                    {showDeliberation && (
+                        <div className="p-4 border-t border-gray-800 space-y-3 max-h-60 overflow-y-auto custom-scrollbar">
+                            {opinions.map((op, i) => (
+                                <div key={i} className="text-sm">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span>{AGENT_TYPES[op.agent as keyof typeof AGENT_TYPES]?.emoji}</span>
+                                        <span className={`font-bold text-xs uppercase ${
+                                            op.stance === 'support' ? 'text-green-500' : 
+                                            op.stance === 'neutral' ? 'text-blue-400' : 'text-red-500'
+                                        }`}>
+                                            {AGENT_TYPES[op.agent as keyof typeof AGENT_TYPES]?.name || op.agent}
+                                        </span>
+                                    </div>
+                                    <p className="text-gray-400 text-xs pl-6 border-l border-gray-700 ml-1">
+                                        {op.reasoning}
+                                    </p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 {swapResult ? (
@@ -663,6 +683,64 @@ function ProposalCard({ proposal, onResolve }: { proposal: any, onResolve: () =>
                         <button onClick={onResolve} disabled={executing} className="flex-1 btn-cyber-outline h-14 text-lg border-red-500 text-red-500 hover:bg-red-500 hover:text-white disabled:opacity-50">
                             REJECT
                         </button>
+                    </div>
+                )}
+            </div>
+        </div>
+    )
+}
+
+function DeliberationTranscript({ opinions }: { opinions: any[] }) {
+    const scrollRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+        }
+    }, [opinions])
+
+    return (
+        <div className="w-full h-full bg-black/90 border-l border-[#FCEE0A] clip-corner-bl flex flex-col">
+            <div className="p-4 border-b border-[#FCEE0A]/30 bg-[#FCEE0A]/10">
+                <div className="flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full bg-[#FCEE0A] animate-pulse"></div>
+                    <span className="font-bold text-[#FCEE0A] uppercase tracking-wider">Council Deliberation</span>
+                </div>
+            </div>
+            <div ref={scrollRef} className="flex-1 p-4 overflow-y-auto space-y-4 custom-scrollbar">
+                {opinions.map((op, i) => {
+                     const stanceColor = op.stance === 'support' ? 'text-green-500'
+                        : op.stance === 'neutral' ? 'text-blue-400'
+                        : 'text-red-500'
+                     const borderColor = op.stance === 'support' ? 'border-green-500/30'
+                        : op.stance === 'neutral' ? 'border-blue-400/30'
+                        : 'border-red-500/30'
+                    
+                    return (
+                        <div key={i} className={`bg-black/40 border ${borderColor} p-3 clip-corner-br animate-in slide-in-from-right duration-500`}>
+                            <div className="flex justify-between items-center mb-2">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-lg">{AGENT_TYPES[op.agent as keyof typeof AGENT_TYPES]?.emoji}</span>
+                                    <span className="text-[#FCEE0A] font-bold text-xs uppercase">
+                                        {AGENT_TYPES[op.agent as keyof typeof AGENT_TYPES]?.name || op.agent}
+                                    </span>
+                                </div>
+                                <span className={`${stanceColor} text-[10px] font-bold uppercase border border-current px-1 rounded`}>
+                                    {op.stance}
+                                </span>
+                            </div>
+                            <p className="text-gray-300 text-xs leading-relaxed">{op.reasoning}</p>
+                            {op.confidence && (
+                                <div className="mt-2 flex justify-end">
+                                    <span className="text-[10px] text-gray-500">Confidence: {op.confidence}%</span>
+                                </div>
+                            )}
+                        </div>
+                    )
+                })}
+                {opinions.length === 0 && (
+                    <div className="text-center text-gray-500 text-xs mt-10 italic">
+                        Waiting for council to convene...
                     </div>
                 )}
             </div>
