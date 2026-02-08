@@ -390,7 +390,7 @@ function buildAgentPrompt(
   userPrompt: string,
   context: StrategyContext,
   previousMessages: CouncilMessage[],
-  deployedAgents?: Array<{ id: string; name: string }>
+  deployedAgents?: Array<{ id: string; name: string; strategy?: string; riskTolerance?: string; description?: string }>
 ): string {
   const prevContext =
     previousMessages.length > 0
@@ -405,7 +405,9 @@ function buildAgentPrompt(
     : ''
 
   const deployedSection = deployedAgents && deployedAgents.length > 0
-    ? `\n\nDeployed Agents:\n${deployedAgents.map(a => `- ${a.name} (${a.id})`).join('\n')}`
+    ? `\n\nUser's Deployed Agents (on-chain ERC-8004 registry, factor their strategies into your recommendation):\n${deployedAgents.map(a => 
+        `- ${a.name}: strategy=${a.strategy || 'unknown'}, risk=${a.riskTolerance || 'moderate'}${a.description ? `, focus: ${a.description}` : ''}`
+      ).join('\n')}`
     : ''
 
   return `${persona.systemPrompt}

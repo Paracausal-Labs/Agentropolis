@@ -8,6 +8,9 @@ import { Agent3D, DeploymentEffect, Coin3D, FloatingText } from './3d/Agents'
 import { MOCK_AGENTS, BUILDINGS_CONFIG, LAMP_POSITIONS, COIN_CONFIG, WALKING_PATH_NODES, ROADS_CONFIG, INITIAL_COINS } from '@/lib/game-constants'
 import { useGame } from '@/contexts/GameContext'
 
+import { useWriteContract, useWaitForTransactionReceipt, useAccount } from 'wagmi'
+import { IDENTITY_REGISTRY_ADDRESS, REGISTER_ABI, addUserAgentTokenId } from '@/lib/erc8004/client'
+
 // Separate component for game logic loop inside Canvas
 function GameLoop() {
     // This could handle frame-by-frame updates if needed
@@ -289,6 +292,76 @@ function AgentPanel({
     deployedIds: string[]
     balance: number
 }) {
+    const [isCreating, setIsCreating] = useState(false)
+    const [formData, setFormData] = useState({
+        name: '',
+        strategy: 'dca',
+        riskTolerance: 'moderate',
+        description: ''
+    })
+    const [customAgents, setCustomAgents] = useState<{ id: string; name: string; strategy: string; reputation: number; type: string; txHash?: string }[]>([])
+    
+    const { isConnected } = useAccount()
+    const { data: hash, writeContract, isPending } = useWriteContract()
+    const { isLoading: isConfirming, isSuccess, data: receipt } = useWaitForTransactionReceipt({ hash })
+
+    useEffect(() => {
+        if (isSuccess && receipt) {
+            const transferLog = receipt.logs[0]
+            if (transferLog && transferLog.topics[3]) {
+                const tokenId = parseInt(transferLog.topics[3], 16)
+                addUserAgentTokenId(tokenId)
+
+                const newAgent = {
+                    id: tokenId.toString(),
+                    name: formData.name,
+                    strategy: formData.strategy,
+                    reputation: 50,
+                    type: formData.strategy === 'dca' || formData.strategy === 'arbitrage' ? 'alphaHunter' : 'macroOracle',
+                    txHash: hash
+                }
+                
+                setCustomAgents(prev => [...prev, newAgent])
+                
+                fetch('/api/agents/metadata', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tokenId, metadata: formData })
+                }).catch(e => console.error('Failed to update metadata', e))
+
+                setIsCreating(false)
+                setFormData({ name: '', strategy: 'dca', riskTolerance: 'moderate', description: '' })
+            }
+        }
+    }, [isSuccess, receipt, hash, formData])
+
+    const handleRegister = async () => {
+        if (!isConnected) return
+        
+        const tempId = Date.now()
+        
+        try {
+            await fetch('/api/agents/metadata', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tokenId: tempId, metadata: formData })
+            })
+
+            const metadataURI = `${window.location.origin}/api/agents/metadata?tokenId=${tempId}`
+            
+            writeContract({
+                address: IDENTITY_REGISTRY_ADDRESS,
+                abi: REGISTER_ABI,
+                functionName: 'register',
+                args: [metadataURI]
+            })
+        } catch (e) {
+            console.error('Registration failed', e)
+        }
+    }
+
+    const allAgents = [...customAgents, ...agents.map(a => ({ ...a, txHash: undefined as string | undefined }))]
+
     return (
         <div className="bg-transparent overflow-hidden">
             {/* Header */}
@@ -305,11 +378,89 @@ function AgentPanel({
                 </div>
             </div>
 
+            <div className="p-3 border-b border-[#FCEE0A]/30">
+                <button
+                    onClick={() => setIsCreating(!isCreating)}
+                    className="w-full py-2 bg-[#FCEE0A]/20 border border-[#FCEE0A] text-[#FCEE0A] font-bold text-xs uppercase tracking-widest hover:bg-[#FCEE0A] hover:text-black transition-all"
+                >
+                    {isCreating ? 'CANCEL CREATION' : '+ CREATE AGENT'}
+                </button>
+
+                {isCreating && (
+                    <div className="mt-3 space-y-3 bg-black/60 p-3 border border-[#FCEE0A]/30">
+                        <div>
+                            <label className="block text-[10px] text-[#FCEE0A] uppercase tracking-wider mb-1">Name</label>
+                            <input
+                                type="text"
+                                value={formData.name}
+                                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                className="w-full bg-black/80 border border-[#FCEE0A]/30 text-white text-xs p-2 focus:border-[#FCEE0A] outline-none font-mono"
+                                placeholder="AGENT NAME"
+                            />
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-2">
+                            <div>
+                                <label className="block text-[10px] text-[#FCEE0A] uppercase tracking-wider mb-1">Strategy</label>
+                                <select
+                                    value={formData.strategy}
+                                    onChange={e => setFormData({ ...formData, strategy: e.target.value })}
+                                    className="w-full bg-black/80 border border-[#FCEE0A]/30 text-white text-xs p-2 focus:border-[#FCEE0A] outline-none font-mono uppercase"
+                                >
+                                    <option value="dca">DCA</option>
+                                    <option value="momentum">Momentum</option>
+                                    <option value="arbitrage">Arbitrage</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] text-[#FCEE0A] uppercase tracking-wider mb-1">Risk</label>
+                                <select
+                                    value={formData.riskTolerance}
+                                    onChange={e => setFormData({ ...formData, riskTolerance: e.target.value })}
+                                    className="w-full bg-black/80 border border-[#FCEE0A]/30 text-white text-xs p-2 focus:border-[#FCEE0A] outline-none font-mono uppercase"
+                                >
+                                    <option value="conservative">Low</option>
+                                    <option value="moderate">Mid</option>
+                                    <option value="aggressive">High</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-[10px] text-[#FCEE0A] uppercase tracking-wider mb-1">Description</label>
+                            <textarea
+                                value={formData.description}
+                                onChange={e => setFormData({ ...formData, description: e.target.value })}
+                                className="w-full bg-black/80 border border-[#FCEE0A]/30 text-white text-xs p-2 focus:border-[#FCEE0A] outline-none font-mono h-16 resize-none"
+                                placeholder="AGENT BEHAVIOR..."
+                            />
+                        </div>
+
+                        <button
+                            onClick={handleRegister}
+                            disabled={!isConnected || isPending || isConfirming || !formData.name}
+                            className={`
+                                w-full py-2 font-bold text-xs uppercase tracking-widest transition-all
+                                ${!isConnected 
+                                    ? 'bg-gray-800 text-gray-500 cursor-not-allowed' 
+                                    : isPending || isConfirming
+                                        ? 'bg-[#FCEE0A]/50 text-black cursor-wait'
+                                        : 'bg-[#FCEE0A] text-black hover:bg-[#FF00FF] hover:text-white'
+                                }
+                            `}
+                        >
+                            {!isConnected ? 'CONNECT WALLET' : isPending ? 'CONFIRM TX...' : isConfirming ? 'REGISTERING...' : 'REGISTER ON-CHAIN'}
+                        </button>
+                    </div>
+                )}
+            </div>
+
             {/* Agent List */}
             <div className="p-3 space-y-2">
-                {agents.map((agent) => {
+                {allAgents.map((agent) => {
                     const isDeployed = deployedIds.includes(agent.id)
                     const canAfford = balance >= 0.01
+                    const isCustom = !!agent.txHash
 
                     return (
                         <div
@@ -324,8 +475,19 @@ function AgentPanel({
                         >
                             <div className="flex justify-between items-start mb-2">
                                 <div>
-                                    <h3 className="font-bold text-white leading-none mb-1 text-sm uppercase font-mono tracking-wider">
+                                    <h3 className="font-bold text-white leading-none mb-1 text-sm uppercase font-mono tracking-wider flex items-center gap-2">
                                         {agent.name}
+                                        {isCustom && (
+                                            <a 
+                                                href={`https://sepolia.basescan.org/tx/${agent.txHash}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-[8px] bg-[#00F0FF]/20 text-[#00F0FF] px-1 rounded border border-[#00F0FF]/30 hover:bg-[#00F0FF]/40"
+                                                onClick={e => e.stopPropagation()}
+                                            >
+                                                TX
+                                            </a>
+                                        )}
                                     </h3>
                                     <p className="text-[10px] text-[#8a8a8a] uppercase tracking-wide font-mono">
                                         {agent.strategy}

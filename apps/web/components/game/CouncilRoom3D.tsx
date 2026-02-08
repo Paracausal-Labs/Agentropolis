@@ -3,9 +3,10 @@
 import { useState, useRef, useEffect } from 'react'
 import Scene3D from './Scene3D'
 import { Agent3D } from './3d/Agents'
-import { COLORS, AGENT_TYPES, PRESET_PROMPTS } from '@/lib/game-constants'
+import { COLORS, AGENT_TYPES, PRESET_PROMPTS, MOCK_AGENTS } from '@/lib/game-constants'
 import { useGame } from '@/contexts/GameContext'
 import { useStrategyExecutor } from '@/lib/uniswap/strategy-router'
+import { useAccount } from 'wagmi'
 
 interface ChatMessage {
     id: string
@@ -22,7 +23,8 @@ const BACKEND_TO_FRONTEND_AGENT: Record<string, keyof typeof AGENT_TYPES> = {
 }
 
 export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
-    const { actions } = useGame()
+    const { state: gameState, actions } = useGame()
+    const { address } = useAccount()
 
     // Interaction State
     const [selectedAgent, setSelectedAgent] = useState<string | null>(null)
@@ -150,7 +152,18 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
             const res = await fetch('/api/agents/council', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userPrompt: currentPrompt }),
+                body: JSON.stringify({
+                    userPrompt: currentPrompt,
+                    walletAddress: address,
+                    deployedAgents: gameState.deployedAgents.map(a => {
+                        const agentConfig = MOCK_AGENTS.find(m => m.id === a.agentId)
+                        return {
+                            id: a.agentId,
+                            name: agentConfig?.name || a.agentId,
+                            strategy: agentConfig?.strategy,
+                        }
+                    }),
+                }),
                 signal: controller.signal,
             })
 
