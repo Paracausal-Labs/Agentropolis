@@ -84,10 +84,11 @@ export default function Scene3D({
                 {enablePostProcessing && (
                     <EffectComposer multisampling={0}>
                         <Bloom
-                            intensity={1.2}
-                            luminanceThreshold={0.3}
+                            intensity={1.0}
+                            luminanceThreshold={0.4}
                             luminanceSmoothing={0.9}
                             mipmapBlur
+                            levels={3}
                         />
                     </EffectComposer>
                 )}

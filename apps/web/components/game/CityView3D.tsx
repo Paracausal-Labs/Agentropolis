@@ -1,12 +1,15 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import Scene3D from './Scene3D'
 import { Building, Road, Ground, StreetLamp } from './3d/Buildings'
 import { Agent3D, DeploymentEffect, Coin3D, FloatingText } from './3d/Agents'
 import { MOCK_AGENTS, BUILDINGS_CONFIG, LAMP_POSITIONS, COIN_CONFIG, WALKING_PATH_NODES, ROADS_CONFIG, INITIAL_COINS } from '@/lib/game-constants'
 import { useGame } from '@/contexts/GameContext'
+
+import { useWriteContract, useWaitForTransactionReceipt, useAccount } from 'wagmi'
+import { IDENTITY_REGISTRY_ADDRESS, REGISTER_ABI, addUserAgentTokenId } from '@/lib/erc8004/client'
 
 // Separate component for game logic loop inside Canvas
 function GameLoop() {
@@ -25,8 +28,8 @@ export default function CityView3D({ onEnterCouncil }: CityView3DProps) {
     const [coins, setCoins] = useState<{ id: string, position: [number, number, number], type: 'bronze' | 'silver' | 'gold', collected: boolean }[]>([])
     const [visuals, setVisuals] = useState<{ id: number, position: [number, number, number], text: string, color: string }[]>([])
     const [hasMounted, setHasMounted] = useState(false)
+    const [showMarketplace, setShowMarketplace] = useState(false)
 
-    // Fix hydration mismatch
     useEffect(() => {
         setHasMounted(true)
     }, [])
@@ -94,6 +97,7 @@ export default function CityView3D({ onEnterCouncil }: CityView3DProps) {
     return (
         <div className="w-full h-full relative">
             {/* 3D Scene */}
+            <div className="w-full h-full" style={showMarketplace ? { visibility: 'hidden' } : undefined}>
             <Scene3D
                 cameraPosition={[22, 22, 22]}
                 cameraMode="isometric"
@@ -156,8 +160,7 @@ export default function CityView3D({ onEnterCouncil }: CityView3DProps) {
                 {/* Effects */}
                 {showDeployEffect && <DeploymentEffect position={showDeployEffect} />}
             </Scene3D>
-
-
+            </div>
 
             {/* Deployment Panel (Right Side) */}
             <div className="absolute top-12 right-4 w-72 max-h-[calc(100vh-6rem)] overflow-y-auto cyber-panel clip-corner-all bg-black/90">
@@ -178,9 +181,12 @@ export default function CityView3D({ onEnterCouncil }: CityView3DProps) {
                             ACTIVE_AGENTS: <span className="text-white font-bold">{state.deployedAgents.length}/6</span>
                         </span>
                         <div className="h-3 w-px bg-[#FCEE0A]/30"></div>
-                        <span className="text-[#00F0FF] animate-pulse">
-                            {'>'} CITY_OPERATIONS_NORMAL
-                        </span>
+                        <button
+                            onClick={() => setShowMarketplace(true)}
+                            className="text-[#00F0FF] uppercase tracking-wider hover:text-[#FCEE0A] transition-colors"
+                        >
+                            {'>'} AGENT_MARKETPLACE
+                        </button>
                     </div>
                     <div className="flex gap-3 items-center">
                         <span className="text-gray-500">XP:</span>
@@ -192,11 +198,7 @@ export default function CityView3D({ onEnterCouncil }: CityView3DProps) {
                 </div>
             </div>
 
-            {/* Hover Trap for Buildings */}
-            <div
-                className="absolute inset-0 pointer-events-none"
-                style={{ display: 'none' }} // Actually handled by 3D events, but could add UI tooltips here
-            />
+            {showMarketplace && <AgentMarketplace onClose={() => setShowMarketplace(false)} />}
         </div>
     )
 }
@@ -276,6 +278,92 @@ function WalkingAgentWrapper({ agent, onPosUpdate }: { agent: any, onPosUpdate: 
     )
 }
 
+interface RegistryAgent {
+    agentId: number
+    name: string
+    description: string
+    image: string
+    strategy: string
+    riskTolerance: string
+    reputation?: number
+    registrySource: string
+}
+
+function AgentMarketplace({ onClose }: { onClose: () => void }) {
+    const [agents, setAgents] = useState<RegistryAgent[]>([])
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        fetch('/api/agents/list')
+            .then(res => res.json())
+            .then(data => { setAgents(data); setLoading(false) })
+            .catch(() => setLoading(false))
+    }, [])
+
+    return (
+        <div className="absolute inset-0 z-[100] flex items-center justify-center bg-[#050510]">
+            <div className="w-[600px] max-h-[80vh] bg-[#050510] border border-[#FCEE0A]/40 overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-3 bg-[#FCEE0A]/10 border-b border-[#FCEE0A]/30">
+                    <div>
+                        <h2 className="text-lg font-black text-[#FCEE0A] uppercase tracking-widest">AGENT_REGISTRY</h2>
+                        <p className="text-[10px] text-gray-400 font-mono uppercase tracking-wider">ERC-8004 ON-CHAIN REGISTRY // BASE SEPOLIA</p>
+                    </div>
+                    <button onClick={onClose} className="text-gray-400 hover:text-[#FCEE0A] text-xl font-bold transition-colors">
+                        ✕
+                    </button>
+                </div>
+
+                <div className="overflow-y-auto max-h-[calc(80vh-60px)] p-4 space-y-3 custom-scrollbar">
+                    {loading ? (
+                        <div className="text-center py-8">
+                            <span className="text-[#00F0FF] font-mono text-sm animate-pulse">QUERYING ON-CHAIN REGISTRY...</span>
+                        </div>
+                    ) : agents.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500 font-mono text-sm">NO AGENTS FOUND</div>
+                    ) : (
+                        agents.map(agent => (
+                            <div key={agent.agentId} className="bg-black/60 border border-[#FCEE0A]/20 p-4 hover:border-[#FCEE0A]/50 transition-all">
+                                <div className="flex gap-4">
+                                    <img
+                                        src={agent.image}
+                                        alt={agent.name}
+                                        className="w-16 h-16 object-cover border border-[#FCEE0A]/30"
+                                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                                    />
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <h3 className="font-bold text-white text-sm uppercase font-mono tracking-wider">{agent.name}</h3>
+                                            <span className="text-[8px] bg-[#00FF88]/20 text-[#00FF88] px-1.5 py-0.5 border border-[#00FF88]/30 font-mono uppercase">
+                                                {agent.registrySource}
+                                            </span>
+                                            <a
+                                                href={`https://sepolia.basescan.org/token/0x8004A818BFB912233c491871b3d84c89A494BD9e?a=${agent.agentId}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-[8px] bg-[#00F0FF]/20 text-[#00F0FF] px-1.5 py-0.5 border border-[#00F0FF]/30 font-mono hover:bg-[#00F0FF]/40 transition-colors"
+                                            >
+                                                #{agent.agentId}
+                                            </a>
+                                        </div>
+                                        <p className="text-[11px] text-gray-400 mb-2 leading-relaxed">{agent.description}</p>
+                                        <div className="flex gap-3 text-[10px] font-mono">
+                                            <span className="text-[#FCEE0A]">STRATEGY: <span className="text-white">{agent.strategy?.toUpperCase()}</span></span>
+                                            <span className="text-[#FCEE0A]">RISK: <span className="text-white">{agent.riskTolerance?.toUpperCase()}</span></span>
+                                            {agent.reputation !== undefined && (
+                                                <span className="text-[#FCEE0A]">REP: <span className="text-white">{agent.reputation}/100</span></span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            </div>
+        </div>
+    )
+}
+
 function AgentPanel({
     agents,
     deployedCount,
@@ -289,6 +377,92 @@ function AgentPanel({
     deployedIds: string[]
     balance: number
 }) {
+    const [isCreating, setIsCreating] = useState(false)
+    const [formData, setFormData] = useState({
+        name: '',
+        strategy: 'dca',
+        riskTolerance: 'moderate',
+        description: ''
+    })
+    const CUSTOM_AGENTS_KEY = 'agentropolis_custom_agents'
+    const [customAgents, setCustomAgents] = useState<{ id: string; name: string; strategy: string; reputation: number; type: string; txHash?: string }[]>(() => {
+        if (typeof window === 'undefined') return []
+        try {
+            const stored = localStorage.getItem(CUSTOM_AGENTS_KEY)
+            return stored ? JSON.parse(stored) : []
+        } catch { return [] }
+    })
+    const processedHashRef = useRef<string | null>(null)
+    const formDataRef = useRef(formData)
+    formDataRef.current = formData
+    
+    const { isConnected } = useAccount()
+    const { data: hash, writeContract, isPending } = useWriteContract()
+    const { isLoading: isConfirming, isSuccess, data: receipt } = useWaitForTransactionReceipt({ hash })
+
+    useEffect(() => {
+        if (isSuccess && receipt && hash && processedHashRef.current !== hash) {
+            processedHashRef.current = hash
+            const transferLog = receipt.logs[0]
+            if (transferLog && transferLog.topics[3]) {
+                const tokenId = parseInt(transferLog.topics[3], 16)
+                addUserAgentTokenId(tokenId)
+
+                const fd = formDataRef.current
+                const newAgent = {
+                    id: tokenId.toString(),
+                    name: fd.name || `Agent #${tokenId}`,
+                    strategy: fd.strategy,
+                    reputation: 50,
+                    type: fd.strategy === 'dca' || fd.strategy === 'arbitrage' ? 'alphaHunter' : 'macroOracle',
+                    txHash: hash
+                }
+                
+                setCustomAgents(prev => {
+                    const updated = [...prev, newAgent]
+                    localStorage.setItem(CUSTOM_AGENTS_KEY, JSON.stringify(updated))
+                    return updated
+                })
+                
+                fetch('/api/agents/metadata', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tokenId, metadata: fd })
+                }).catch(e => console.error('Failed to update metadata', e))
+
+                setIsCreating(false)
+                setFormData({ name: '', strategy: 'dca', riskTolerance: 'moderate', description: '' })
+            }
+        }
+    }, [isSuccess, receipt, hash])
+
+    const handleRegister = async () => {
+        if (!isConnected) return
+        
+        const tempId = Date.now()
+        
+        try {
+            await fetch('/api/agents/metadata', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tokenId: tempId, metadata: formData })
+            })
+
+            const metadataURI = `${window.location.origin}/api/agents/metadata?tokenId=${tempId}`
+            
+            writeContract({
+                address: IDENTITY_REGISTRY_ADDRESS,
+                abi: REGISTER_ABI,
+                functionName: 'register',
+                args: [metadataURI]
+            })
+        } catch (e) {
+            console.error('Registration failed', e)
+        }
+    }
+
+    const allAgents = [...customAgents, ...agents.map(a => ({ ...a, txHash: undefined as string | undefined }))]
+
     return (
         <div className="bg-transparent overflow-hidden">
             {/* Header */}
@@ -305,11 +479,89 @@ function AgentPanel({
                 </div>
             </div>
 
+            <div className="p-3 border-b border-[#FCEE0A]/30">
+                <button
+                    onClick={() => setIsCreating(!isCreating)}
+                    className="w-full py-2 bg-[#FCEE0A]/20 border border-[#FCEE0A] text-[#FCEE0A] font-bold text-xs uppercase tracking-widest hover:bg-[#FCEE0A] hover:text-black transition-all"
+                >
+                    {isCreating ? 'CANCEL CREATION' : '+ CREATE AGENT'}
+                </button>
+
+                {isCreating && (
+                    <div className="mt-3 space-y-3 bg-black/60 p-3 border border-[#FCEE0A]/30">
+                        <div>
+                            <label className="block text-[10px] text-[#FCEE0A] uppercase tracking-wider mb-1">Name</label>
+                            <input
+                                type="text"
+                                value={formData.name}
+                                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                className="w-full bg-black/80 border border-[#FCEE0A]/30 text-white text-xs p-2 focus:border-[#FCEE0A] outline-none font-mono"
+                                placeholder="AGENT NAME"
+                            />
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-2">
+                            <div>
+                                <label className="block text-[10px] text-[#FCEE0A] uppercase tracking-wider mb-1">Strategy</label>
+                                <select
+                                    value={formData.strategy}
+                                    onChange={e => setFormData({ ...formData, strategy: e.target.value })}
+                                    className="w-full bg-black/80 border border-[#FCEE0A]/30 text-white text-xs p-2 focus:border-[#FCEE0A] outline-none font-mono uppercase"
+                                >
+                                    <option value="dca">DCA</option>
+                                    <option value="momentum">Momentum</option>
+                                    <option value="arbitrage">Arbitrage</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] text-[#FCEE0A] uppercase tracking-wider mb-1">Risk</label>
+                                <select
+                                    value={formData.riskTolerance}
+                                    onChange={e => setFormData({ ...formData, riskTolerance: e.target.value })}
+                                    className="w-full bg-black/80 border border-[#FCEE0A]/30 text-white text-xs p-2 focus:border-[#FCEE0A] outline-none font-mono uppercase"
+                                >
+                                    <option value="conservative">Low</option>
+                                    <option value="moderate">Mid</option>
+                                    <option value="aggressive">High</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-[10px] text-[#FCEE0A] uppercase tracking-wider mb-1">Description</label>
+                            <textarea
+                                value={formData.description}
+                                onChange={e => setFormData({ ...formData, description: e.target.value })}
+                                className="w-full bg-black/80 border border-[#FCEE0A]/30 text-white text-xs p-2 focus:border-[#FCEE0A] outline-none font-mono h-16 resize-none"
+                                placeholder="AGENT BEHAVIOR..."
+                            />
+                        </div>
+
+                        <button
+                            onClick={handleRegister}
+                            disabled={!isConnected || isPending || isConfirming || !formData.name}
+                            className={`
+                                w-full py-2 font-bold text-xs uppercase tracking-widest transition-all
+                                ${!isConnected 
+                                    ? 'bg-gray-800 text-gray-500 cursor-not-allowed' 
+                                    : isPending || isConfirming
+                                        ? 'bg-[#FCEE0A]/50 text-black cursor-wait'
+                                        : 'bg-[#FCEE0A] text-black hover:bg-[#FF00FF] hover:text-white'
+                                }
+                            `}
+                        >
+                            {!isConnected ? 'CONNECT WALLET' : isPending ? 'CONFIRM TX...' : isConfirming ? 'REGISTERING...' : 'REGISTER ON-CHAIN'}
+                        </button>
+                    </div>
+                )}
+            </div>
+
             {/* Agent List */}
             <div className="p-3 space-y-2">
-                {agents.map((agent) => {
+                {allAgents.map((agent) => {
                     const isDeployed = deployedIds.includes(agent.id)
                     const canAfford = balance >= 0.01
+                    const isCustom = !!agent.txHash
 
                     return (
                         <div
@@ -324,8 +576,19 @@ function AgentPanel({
                         >
                             <div className="flex justify-between items-start mb-2">
                                 <div>
-                                    <h3 className="font-bold text-white leading-none mb-1 text-sm uppercase font-mono tracking-wider">
+                                    <h3 className="font-bold text-white leading-none mb-1 text-sm uppercase font-mono tracking-wider flex items-center gap-2">
                                         {agent.name}
+                                        {isCustom && (
+                                            <a 
+                                                href={`https://sepolia.basescan.org/tx/${agent.txHash}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-[8px] bg-[#00F0FF]/20 text-[#00F0FF] px-1 rounded border border-[#00F0FF]/30 hover:bg-[#00F0FF]/40"
+                                                onClick={e => e.stopPropagation()}
+                                            >
+                                                TX
+                                            </a>
+                                        )}
                                     </h3>
                                     <p className="text-[10px] text-[#8a8a8a] uppercase tracking-wide font-mono">
                                         {agent.strategy}

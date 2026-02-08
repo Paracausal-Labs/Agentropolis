@@ -31,6 +31,16 @@ const IDENTITY_REGISTRY_ABI = [
   },
 ] as const
 
+const REGISTER_ABI = [
+  {
+    inputs: [{ name: 'metadataURI', type: 'string' }],
+    name: 'register',
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+] as const
+
 const OUR_AGENT_TOKEN_IDS = [298, 299, 300] as const
 
 const REPUTATION_REGISTRY_ABI = [
@@ -121,8 +131,10 @@ export async function queryERC8004Registry(
     console.log('[ERC-8004] Querying Base Sepolia registry at', IDENTITY_REGISTRY_ADDRESS)
 
     const agents: AgentProfile[] = []
+    const userIds = getUserAgentTokenIds()
+    const allTokenIds = [...OUR_AGENT_TOKEN_IDS, ...userIds.filter(id => !OUR_AGENT_TOKEN_IDS.includes(id as 298 | 299 | 300))]
 
-    for (const tokenId of OUR_AGENT_TOKEN_IDS) {
+    for (const tokenId of allTokenIds) {
       try {
         const metadataUri = (await client.readContract({
           address: IDENTITY_REGISTRY_ADDRESS,
@@ -192,4 +204,25 @@ export async function getAgents(
 
 export function get8004ScanUrl(agentId: number): string {
   return `https://www.8004scan.io/agent/${ERC8004_CHAIN_ID}/${IDENTITY_REGISTRY_ADDRESS}/${agentId}`
+}
+
+export {
+  IDENTITY_REGISTRY_ADDRESS,
+  REGISTER_ABI,
+}
+
+export function addUserAgentTokenId(tokenId: number) {
+  if (typeof window === 'undefined') return
+  const stored = localStorage.getItem('agentropolis_user_agent_ids')
+  const ids: number[] = stored ? JSON.parse(stored) : []
+  if (!ids.includes(tokenId)) {
+    ids.push(tokenId)
+    localStorage.setItem('agentropolis_user_agent_ids', JSON.stringify(ids))
+  }
+}
+
+export function getUserAgentTokenIds(): number[] {
+  if (typeof window === 'undefined') return []
+  const stored = localStorage.getItem('agentropolis_user_agent_ids')
+  return stored ? JSON.parse(stored) : []
 }
