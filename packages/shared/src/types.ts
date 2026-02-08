@@ -64,6 +64,7 @@ export interface AgentProfile {
   reputation?: number // 0-100 scale from reputation registry
   registrySource?: 'erc8004' | 'mock' // Track if from real registry or mock
   serviceEndpoint?: string // External agent endpoint URL
+  agentWallet?: string // Wallet set via setAgentWallet (or register default)
 }
 
 // External Agent Protocol (BYOA)

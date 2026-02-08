@@ -125,6 +125,18 @@ class MockStore {
         const { deployedAgents, ytestBalance } = this.state
         const agentConfig = MOCK_AGENTS.find(a => a.id === agentId)
 
+        let customAgentType: string | undefined
+        if (!agentConfig && typeof window !== 'undefined') {
+            try {
+                const stored = localStorage.getItem('agentropolis_custom_agents')
+                const parsed = stored ? (JSON.parse(stored) as Array<{ id?: string; type?: string }>) : []
+                const match = parsed.find((a) => a?.id === agentId)
+                customAgentType = match?.type
+            } catch {
+                customAgentType = undefined
+            }
+        }
+
         if (deployedAgents.length >= 6) throw new Error('Max agents reached')
         if (ytestBalance < 0.01) throw new Error('Insufficient funds')
 
@@ -133,10 +145,13 @@ class MockStore {
         ]
         const position = positions[deployedAgents.length] || [0, 0, 0]
 
+        const resolvedType = agentConfig?.type ?? customAgentType
         const newAgent: DeployedAgent = {
             id: Math.random().toString(36).substr(2, 9),
             agentId: agentConfig?.id || agentId,
-            type: (agentConfig?.type || 'alphaHunter') as keyof typeof AGENT_TYPES,
+            type: (resolvedType && resolvedType in AGENT_TYPES
+                ? resolvedType
+                : 'alphaHunter') as keyof typeof AGENT_TYPES,
             deployedAt: Date.now(),
             position,
         }

@@ -8,8 +8,15 @@ import { Agent3D, DeploymentEffect, Coin3D, FloatingText } from './3d/Agents'
 import { MOCK_AGENTS, BUILDINGS_CONFIG, LAMP_POSITIONS, COIN_CONFIG, WALKING_PATH_NODES, ROADS_CONFIG, INITIAL_COINS } from '@/lib/game-constants'
 import { useGame } from '@/contexts/GameContext'
 
-import { useWriteContract, useWaitForTransactionReceipt, useAccount } from 'wagmi'
-import { IDENTITY_REGISTRY_ADDRESS, REGISTER_ABI, addUserAgentTokenId } from '@/lib/erc8004/browser'
+import { useWriteContract, useWaitForTransactionReceipt, useAccount, usePublicClient, useWalletClient } from 'wagmi'
+
+import {
+    IDENTITY_REGISTRY_ADDRESS,
+    IDENTITY_REGISTRY_ABI,
+    addUserAgentTokenId,
+    ERC8004_EIP712_DOMAIN,
+    AGENT_WALLET_SET_TYPES,
+} from '@/lib/erc8004/browser'
 
 // Separate component for game logic loop inside Canvas
 function GameLoop() {
@@ -385,7 +392,7 @@ function AgentPanel({
         description: ''
     })
     const CUSTOM_AGENTS_KEY = 'agentropolis_custom_agents'
-    const [customAgents, setCustomAgents] = useState<{ id: string; name: string; strategy: string; reputation: number; type: string; txHash?: string }[]>(() => {
+    const [customAgents, setCustomAgents] = useState<{ id: string; name: string; strategy: string; reputation: number; type: string; txHash?: string; agentWallet?: string }[]>(() => {
         if (typeof window === 'undefined') return []
         try {
             const stored = localStorage.getItem(CUSTOM_AGENTS_KEY)
@@ -393,17 +400,24 @@ function AgentPanel({
         } catch { return [] }
     })
     const processedHashRef = useRef<string | null>(null)
+    const processedWalletSetForTokenIdRef = useRef<Record<string, true>>({})
     const formDataRef = useRef(formData)
     formDataRef.current = formData
     
-    const { isConnected } = useAccount()
-    const { data: hash, writeContract, isPending } = useWriteContract()
-    const { isLoading: isConfirming, isSuccess, data: receipt } = useWaitForTransactionReceipt({ hash })
+    const { isConnected, address } = useAccount()
+    const publicClient = usePublicClient()
+    const { data: walletClient } = useWalletClient()
+
+    const { data: registerHash, writeContract: writeRegister, isPending: isRegisterPending } = useWriteContract()
+    const { isLoading: isRegisterConfirming, isSuccess: isRegisterSuccess, data: registerReceipt } = useWaitForTransactionReceipt({ hash: registerHash })
+
+    const { data: setWalletHash, writeContract: writeSetAgentWallet, isPending: isSetWalletPending } = useWriteContract()
+    const { isLoading: isSetWalletConfirming } = useWaitForTransactionReceipt({ hash: setWalletHash })
 
     useEffect(() => {
-        if (isSuccess && receipt && hash && processedHashRef.current !== hash) {
-            processedHashRef.current = hash
-            const transferLog = receipt.logs[0]
+        if (isRegisterSuccess && registerReceipt && registerHash && processedHashRef.current !== registerHash) {
+            processedHashRef.current = registerHash
+            const transferLog = registerReceipt.logs[0]
             if (transferLog && transferLog.topics[3]) {
                 const tokenId = parseInt(transferLog.topics[3], 16)
                 addUserAgentTokenId(tokenId)
@@ -415,20 +429,73 @@ function AgentPanel({
                     strategy: fd.strategy,
                     reputation: 50,
                     type: fd.strategy === 'dca' || fd.strategy === 'arbitrage' ? 'alphaHunter' : 'macroOracle',
-                    txHash: hash
+                    txHash: registerHash
                 }
-                
+
                 setCustomAgents(prev => {
                     const updated = [...prev, newAgent]
                     localStorage.setItem(CUSTOM_AGENTS_KEY, JSON.stringify(updated))
                     return updated
                 })
 
+                // Optional verification: register() sets agentWallet = msg.sender
+                if (publicClient) {
+                    publicClient
+                        .readContract({
+                            address: IDENTITY_REGISTRY_ADDRESS,
+                            abi: IDENTITY_REGISTRY_ABI,
+                            functionName: 'getAgentWallet',
+                            args: [BigInt(tokenId)],
+                        })
+                        .then((w) => {
+                            const wallet = w as string
+                            setCustomAgents(prev => {
+                                const updated = prev.map((a) => a.id === tokenId.toString() ? { ...a, agentWallet: wallet } : a)
+                                localStorage.setItem(CUSTOM_AGENTS_KEY, JSON.stringify(updated))
+                                return updated
+                            })
+                        })
+                        .catch(() => {
+                            // fall through: we still add the agent below
+                        })
+                }
+
+                // HackMoney demo flow: immediately setAgentWallet with EIP-712 consent.
+                // If newWallet === owner, this still proves typed-data signing works end-to-end.
+                if (address && walletClient?.account && !processedWalletSetForTokenIdRef.current[tokenId.toString()]) {
+                    processedWalletSetForTokenIdRef.current[tokenId.toString()] = true
+                    const deadline = BigInt(Math.floor(Date.now() / 1000) + 4 * 60)
+                    walletClient
+                        .signTypedData({
+                            account: walletClient.account,
+                            domain: ERC8004_EIP712_DOMAIN,
+                            types: AGENT_WALLET_SET_TYPES,
+                            primaryType: 'AgentWalletSet',
+                            message: {
+                                agentId: BigInt(tokenId),
+                                newWallet: address,
+                                owner: address,
+                                deadline,
+                            },
+                        })
+                        .then((signature) => {
+                            writeSetAgentWallet({
+                                address: IDENTITY_REGISTRY_ADDRESS,
+                                abi: IDENTITY_REGISTRY_ABI,
+                                functionName: 'setAgentWallet',
+                                args: [BigInt(tokenId), address, deadline, signature],
+                            })
+                        })
+                        .catch((e) => {
+                            console.warn('[ERC-8004] setAgentWallet signing skipped/failed:', e)
+                        })
+                }
+                
                 setIsCreating(false)
                 setFormData({ name: '', strategy: 'dca', riskTolerance: 'moderate', description: '' })
             }
         }
-    }, [isSuccess, receipt, hash])
+    }, [isRegisterSuccess, registerReceipt, registerHash, address, publicClient, walletClient, writeSetAgentWallet])
 
     const toBase64Utf8 = (input: string) => {
         try {
@@ -452,11 +519,11 @@ function AgentPanel({
             }
             const metadataURI = `data:application/json;base64,${toBase64Utf8(JSON.stringify(metadata))}`
             
-            writeContract({
+            writeRegister({
                 address: IDENTITY_REGISTRY_ADDRESS,
-                abi: REGISTER_ABI,
+                abi: IDENTITY_REGISTRY_ABI,
                 functionName: 'register',
-                args: [metadataURI]
+                args: [metadataURI],
             })
         } catch (e) {
             console.error('Registration failed', e)
@@ -539,23 +606,23 @@ function AgentPanel({
                             />
                         </div>
 
-                        <button
-                            onClick={handleRegister}
-                            disabled={!isConnected || isPending || isConfirming || !formData.name}
-                            className={`
+                    <button
+                        onClick={handleRegister}
+                        disabled={!isConnected || isRegisterPending || isRegisterConfirming || isSetWalletPending || isSetWalletConfirming || !formData.name}
+                        className={`
                                 w-full py-2 font-bold text-xs uppercase tracking-widest transition-all
                                 ${!isConnected 
                                     ? 'bg-gray-800 text-gray-500 cursor-not-allowed' 
-                                    : isPending || isConfirming
+                                    : isRegisterPending || isRegisterConfirming || isSetWalletPending || isSetWalletConfirming
                                         ? 'bg-[#FCEE0A]/50 text-black cursor-wait'
                                         : 'bg-[#FCEE0A] text-black hover:bg-[#FF00FF] hover:text-white'
                                 }
                             `}
-                        >
-                            {!isConnected ? 'CONNECT WALLET' : isPending ? 'CONFIRM TX...' : isConfirming ? 'REGISTERING...' : 'REGISTER ON-CHAIN'}
-                        </button>
-                    </div>
-                )}
+                    >
+                        {!isConnected ? 'CONNECT WALLET' : isRegisterPending ? 'CONFIRM TX...' : isRegisterConfirming ? 'REGISTERING...' : (isSetWalletPending || isSetWalletConfirming) ? 'LINKING WALLET...' : 'REGISTER ON-CHAIN'}
+                    </button>
+                </div>
+            )}
             </div>
 
             {/* Agent List */}
