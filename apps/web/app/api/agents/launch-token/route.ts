@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { TokenLaunchProposal, TokenLaunchResult, DeliberationResult } from '@agentropolis/shared'
 import { FEE_CONFIG } from '@/lib/clanker/constants'
+import { getClientIp, getValidatedUserAddress } from '@/lib/security/request'
 
 const RATE_LIMIT_WINDOW_MS = 60_000
 const RATE_LIMIT_MAX_REQUESTS = 3
@@ -94,8 +95,10 @@ export async function POST(request: NextRequest) {
     return response
   }
 
-  const userAddress = request.headers.get('X-User-Address') || 'anon'
-  const { allowed } = checkGuestRateLimit(`auth:${userAddress}`)
+  const ip = getClientIp(request)
+  const userAddress = getValidatedUserAddress(request.headers)
+  const key = userAddress ? `auth:${userAddress}:${ip}` : `anon:${ip}`
+  const { allowed } = checkGuestRateLimit(key)
   if (!allowed) {
     return NextResponse.json(
       { error: 'Rate limit exceeded' },
@@ -179,6 +182,5 @@ async function handleLaunch(request: NextRequest): Promise<NextResponse> {
     )
   }
 }
-
 
 

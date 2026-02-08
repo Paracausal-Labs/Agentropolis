@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
 import { executeHookUpdate, validateHookParams, type HookUpdateParams } from '@/lib/uniswap/hook-updater'
+import { getClientIp } from '@/lib/security/request'
 
 const hookRateLimits = new Map<string, { count: number; resetAt: number }>()
 const HOOK_RATE_LIMIT_WINDOW_MS = 60_000
@@ -28,6 +29,13 @@ export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get('x-hook-auth')
     const secret = process.env.HOOK_AUTH_SECRET
+    if (process.env.NODE_ENV === 'production' && secret === 'agentropolis-hooks-secret') {
+      console.error('[Hooks] Refusing to run with weak default HOOK_AUTH_SECRET in production')
+      return NextResponse.json(
+        { success: false, error: 'Server misconfigured' },
+        { status: 500 }
+      )
+    }
     if (!authHeader || !secret || authHeader.length !== secret.length || !timingSafeEqual(Buffer.from(authHeader), Buffer.from(secret))) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
@@ -35,7 +43,8 @@ export async function POST(request: Request) {
       )
     }
 
-    if (!checkHookRateLimit(authHeader)) {
+    const ip = getClientIp({ headers: request.headers })
+    if (!checkHookRateLimit(ip)) {
       return NextResponse.json(
         { success: false, error: 'Rate limit exceeded' },
         { status: 429 }

@@ -1,4 +1,6 @@
 import Groq from 'groq-sdk'
+import { lookup } from 'dns/promises'
+import { isIP } from 'net'
 import type {
   TradeProposal,
   TokenLaunchProposal,
@@ -144,6 +146,61 @@ const PRIVATE_IP_PATTERNS = [
 const EXTERNAL_AGENT_TIMEOUT_MS = 10_000 // 10 seconds
 const MAX_RESPONSE_SIZE_BYTES = 1024 * 1024 // 1MB
 
+function isPrivateOrReservedIp(ip: string): boolean {
+  // IPv4 checks.
+  if (isIP(ip) === 4) {
+    const parts = ip.split('.').map((p) => Number(p))
+    if (parts.length !== 4 || parts.some((p) => Number.isNaN(p) || p < 0 || p > 255)) return true
+    const [a, b] = parts
+
+    if (a === 0) return true // 0.0.0.0/8
+    if (a === 10) return true // 10.0.0.0/8
+    if (a === 127) return true // 127.0.0.0/8
+    if (a === 169 && b === 254) return true // 169.254.0.0/16
+    if (a === 172 && b >= 16 && b <= 31) return true // 172.16.0.0/12
+    if (a === 192 && b === 168) return true // 192.168.0.0/16
+    if (a === 100 && b >= 64 && b <= 127) return true // 100.64.0.0/10 (CGNAT)
+    if (a >= 224) return true // multicast + reserved
+    return false
+  }
+
+  // IPv6 checks.
+  if (isIP(ip) === 6) {
+    const lower = ip.toLowerCase()
+    if (lower === '::' || lower === '::1') return true
+    if (lower.startsWith('fc') || lower.startsWith('fd')) return true // fc00::/7 (ULA)
+    if (lower.startsWith('fe8') || lower.startsWith('fe9') || lower.startsWith('fea') || lower.startsWith('feb')) return true // fe80::/10
+    if (lower.startsWith('2001:db8:')) return true // documentation range
+    return false
+  }
+
+  // Non-IP hostnames should be resolved before use.
+  return true
+}
+
+async function validateResolvedPublicAddress(hostname: string): Promise<{ valid: boolean; error?: string }> {
+  // If it's already an IP literal, validate directly.
+  if (isIP(hostname)) {
+    return isPrivateOrReservedIp(hostname)
+      ? { valid: false, error: 'Private or reserved IP addresses are not allowed' }
+      : { valid: true }
+  }
+
+  try {
+    const results = await lookup(hostname, { all: true, verbatim: true })
+    if (!results || results.length === 0) return { valid: false, error: 'DNS lookup failed' }
+
+    for (const r of results) {
+      if (isPrivateOrReservedIp(r.address)) {
+        return { valid: false, error: 'Hostname resolves to a private/reserved IP' }
+      }
+    }
+    return { valid: true }
+  } catch {
+    return { valid: false, error: 'DNS lookup failed' }
+  }
+}
+
 function validateExternalEndpoint(endpoint: string): { valid: boolean; error?: string } {
   let url: URL
   try {
@@ -172,6 +229,11 @@ function validateExternalEndpoint(endpoint: string): { valid: boolean; error?: s
   // For all external hosts, require HTTPS
   if (url.protocol !== 'https:') {
     return { valid: false, error: 'HTTPS required for external endpoints' }
+  }
+
+  // Disallow credentialed URLs (https://user:pass@host)
+  if (url.username || url.password) {
+    return { valid: false, error: 'Credentials in URL are not allowed' }
   }
 
   // Check exact API domain match
@@ -205,6 +267,13 @@ async function callExternalAgent(
     }
   }
 
+  const url = new URL(endpoint)
+  const dnsValidation = await validateResolvedPublicAddress(url.hostname.toLowerCase())
+  if (!dnsValidation.valid) {
+    console.error('[Council] SSRF blocked (DNS):', dnsValidation.error)
+    return { success: false, error: `Endpoint blocked: ${dnsValidation.error}` }
+  }
+
   const fetcher = x402Fetch || fetch
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), EXTERNAL_AGENT_TIMEOUT_MS)
@@ -217,6 +286,7 @@ async function callExternalAgent(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
       signal: controller.signal,
+      redirect: 'error',
     })
 
     clearTimeout(timeoutId)
@@ -237,16 +307,27 @@ async function callExternalAgent(
       throw new Error(`Response too large: ${text.length} bytes (max ${MAX_RESPONSE_SIZE_BYTES})`)
     }
 
-    const data = JSON.parse(text)
+    const parsed = JSON.parse(text) as Record<string, unknown>
     console.log('[Council] External agent response received')
-    
+
     const paymentTx = response.headers.get('X-Payment-Response')
     if (paymentTx) {
       console.log('[Council] x402 payment settled:', paymentTx)
-      return { ...data, paymentTxHash: paymentTx } as ExternalAgentResponse
+      return {
+        success: parsed?.success === true,
+        proposal: parsed?.proposal as ExternalAgentResponse['proposal'],
+        error: typeof parsed?.error === 'string' ? (parsed.error as string) : undefined,
+        processingTime: typeof parsed?.processingTime === 'number' ? (parsed.processingTime as number) : undefined,
+        paymentTxHash: paymentTx,
+      }
     }
 
-    return data as ExternalAgentResponse
+    return {
+      success: parsed?.success === true,
+      proposal: parsed?.proposal as ExternalAgentResponse['proposal'],
+      error: typeof parsed?.error === 'string' ? (parsed.error as string) : undefined,
+      processingTime: typeof parsed?.processingTime === 'number' ? (parsed.processingTime as number) : undefined,
+    }
   } catch (error) {
     clearTimeout(timeoutId)
     
@@ -1215,7 +1296,9 @@ export function extractHookParameters(
  * Push hook parameters to chain directly (no HTTP roundtrip).
  * Called after council deliberation completes.
  */
-export async function updateHookParameters(params: HookParameters): Promise<void> {
+export async function updateHookParameters(
+  params: HookParameters
+): Promise<{ success: boolean; txHashes: string[]; error?: string }> {
   try {
     const result = await executeHookUpdate({
       feeBps: params.feeBps,
@@ -1226,12 +1309,18 @@ export async function updateHookParameters(params: HookParameters): Promise<void
 
     if (!result.success) {
       console.error('[Council→Hooks] Update failed:', result.error)
-      return
+      return { success: false, txHashes: [], error: result.error || 'Hook update failed' }
     }
 
     console.log('[Council→Hooks] Parameters updated on-chain:', result)
+    return { success: true, txHashes: result.txHashes }
   } catch (err) {
     console.error('[Council→Hooks] Failed to update hook parameters:', err)
+    return {
+      success: false,
+      txHashes: [],
+      error: err instanceof Error ? err.message : 'Hook update failed',
+    }
   }
 }
 

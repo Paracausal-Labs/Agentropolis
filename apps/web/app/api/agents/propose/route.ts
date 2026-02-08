@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { generateProposal, type ProposalRequest } from '@/lib/agents/orchestrator'
+import { getClientIp, getValidatedUserAddress } from '@/lib/security/request'
 
 const RATE_LIMIT_WINDOW_MS = 60_000
 const GUEST_RATE_LIMIT_MAX = 10
@@ -83,8 +84,10 @@ export async function POST(request: NextRequest) {
   }
 
   // Rate limit authenticated users too (higher limit)
-  const userAddress = request.headers.get('X-User-Address') || 'anon'
-  const { allowed } = await checkRateLimit(`auth:${userAddress}`, AUTH_RATE_LIMIT_MAX)
+  const ip = getClientIp(request)
+  const userAddress = getValidatedUserAddress(request.headers)
+  const key = userAddress ? `auth:${userAddress}:${ip}` : `anon:${ip}`
+  const { allowed } = await checkRateLimit(key, AUTH_RATE_LIMIT_MAX)
   if (!allowed) {
     return NextResponse.json(
       { error: 'Rate limit exceeded' },

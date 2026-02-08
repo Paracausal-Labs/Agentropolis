@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createPublicClient, http } from 'viem'
 import { sepolia } from 'viem/chains'
 import { normalize } from 'viem/ens'
+import { isAddress } from 'viem'
 import {
   runCouncilDeliberation,
   runTokenLaunchDeliberation,
@@ -11,46 +12,21 @@ import {
   validateExternalEndpoint,
   type CouncilRequest,
 } from '@/lib/agents/council'
+import { getClientIp, getValidatedUserAddress, readJsonWithLimit } from '@/lib/security/request'
+import { checkRateLimit, cleanupExpiredRateLimits } from '@/lib/security/rateLimit'
 
 const RATE_LIMIT_WINDOW_MS = 60_000
 const RATE_LIMIT_MAX_REQUESTS = 5
 
-const guestRateLimits = new Map<string, { count: number; resetAt: number }>()
-
-function checkGuestRateLimit(sessionId: string): { allowed: boolean; remaining: number } {
-  const now = Date.now()
-  const entry = guestRateLimits.get(sessionId)
-
-  if (!entry || now >= entry.resetAt) {
-    guestRateLimits.set(sessionId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS })
-    return { allowed: true, remaining: RATE_LIMIT_MAX_REQUESTS - 1 }
-  }
-
-  if (entry.count >= RATE_LIMIT_MAX_REQUESTS) {
-    return { allowed: false, remaining: 0 }
-  }
-
-  entry.count++
-  return { allowed: true, remaining: RATE_LIMIT_MAX_REQUESTS - entry.count }
-}
-
-function cleanupExpiredLimits() {
-  const now = Date.now()
-  for (const [key, entry] of guestRateLimits.entries()) {
-    if (now >= entry.resetAt) {
-      guestRateLimits.delete(key)
-    }
-  }
-}
-
 export async function POST(request: NextRequest) {
+  cleanupExpiredRateLimits()
+
   const guestSession = request.headers.get('X-Guest-Session')
 
   if (guestSession) {
-    cleanupExpiredLimits()
-    const { allowed, remaining } = checkGuestRateLimit(guestSession)
+    const rl = checkRateLimit(`guest:${guestSession}`, { windowMs: RATE_LIMIT_WINDOW_MS, max: RATE_LIMIT_MAX_REQUESTS })
 
-    if (!allowed) {
+    if (!rl.allowed) {
       return NextResponse.json(
         {
           error: 'Rate limit exceeded',
@@ -61,7 +37,7 @@ export async function POST(request: NextRequest) {
           headers: {
             'X-RateLimit-Limit': String(RATE_LIMIT_MAX_REQUESTS),
             'X-RateLimit-Remaining': '0',
-            'Retry-After': '60',
+            'Retry-After': String(Math.ceil((rl.resetAt - Date.now()) / 1000)),
           },
         }
       )
@@ -69,51 +45,98 @@ export async function POST(request: NextRequest) {
 
     const response = await handleDeliberation(request)
     response.headers.set('X-RateLimit-Limit', String(RATE_LIMIT_MAX_REQUESTS))
-    response.headers.set('X-RateLimit-Remaining', String(remaining))
+    response.headers.set('X-RateLimit-Remaining', String(rl.remaining))
     return response
   }
 
-  const userAddress = request.headers.get('X-User-Address') || 'anon'
-  const { allowed } = checkGuestRateLimit(`auth:${userAddress}`)
-  if (!allowed) {
+  const ip = getClientIp(request)
+  const userAddress = getValidatedUserAddress(request.headers)
+  const key = userAddress ? `auth:${userAddress}:${ip}` : `anon:${ip}`
+  const rl = checkRateLimit(key, { windowMs: RATE_LIMIT_WINDOW_MS, max: RATE_LIMIT_MAX_REQUESTS })
+  if (!rl.allowed) {
     return NextResponse.json(
       { error: 'Rate limit exceeded' },
-      { status: 429 }
+      {
+        status: 429,
+        headers: {
+          'X-RateLimit-Limit': String(RATE_LIMIT_MAX_REQUESTS),
+          'X-RateLimit-Remaining': '0',
+          'Retry-After': String(Math.ceil((rl.resetAt - Date.now()) / 1000)),
+        },
+      }
     )
   }
 
-  return handleDeliberation(request)
+  const response = await handleDeliberation(request)
+  response.headers.set('X-RateLimit-Limit', String(RATE_LIMIT_MAX_REQUESTS))
+  response.headers.set('X-RateLimit-Remaining', String(rl.remaining))
+  return response
 }
 
 async function handleDeliberation(request: NextRequest): Promise<NextResponse> {
   try {
-    const body = await request.json()
+    const parsed = await readJsonWithLimit<Record<string, unknown>>(request, 25_000)
+    if (!parsed.ok) {
+      return NextResponse.json({ error: 'Bad request', message: parsed.error }, { status: parsed.status })
+    }
+    const body = parsed.value
 
-    if (!body.userPrompt) {
+    if (typeof body.userPrompt !== 'string' || !body.userPrompt.trim()) {
       return NextResponse.json(
         { error: 'Bad request', message: 'userPrompt is required' },
         { status: 400 }
       )
     }
 
-    const userPrompt = String(body.userPrompt)
+    const userPrompt = body.userPrompt.slice(0, 2000)
+
+    const contextRaw = body.context
+    const contextObj =
+      contextRaw && typeof contextRaw === 'object' ? (contextRaw as Record<string, unknown>) : {}
+
+    const preferredTokensRaw = contextObj.preferredTokens
+    const preferredTokens = Array.isArray(preferredTokensRaw)
+      ? preferredTokensRaw.filter((t): t is string => typeof t === 'string').slice(0, 20)
+      : ['USDC', 'WETH']
+
+    const deployedAgentsRaw = body.deployedAgents
+    const deployedAgents = Array.isArray(deployedAgentsRaw)
+      ? deployedAgentsRaw
+          .slice(0, 25)
+          .map((a) => {
+            const obj = a && typeof a === 'object' ? (a as Record<string, unknown>) : null
+            return {
+              id: String(obj?.id ?? '').slice(0, 64),
+              name: String(obj?.name ?? '').slice(0, 64),
+            }
+          })
+          .filter((a) => a.id && a.name)
+      : undefined
+
     const councilRequest: CouncilRequest = {
       userPrompt,
       context: {
-        balance: body.context?.balance || '0.1 ETH',
-        preferredTokens: body.context?.preferredTokens || ['USDC', 'WETH'],
-        riskLevel: body.context?.riskLevel || 'medium',
+        balance: typeof contextObj.balance === 'string' ? contextObj.balance : '0.1 ETH',
+        preferredTokens,
+        riskLevel:
+          typeof contextObj.riskLevel === 'string' && ['low', 'medium', 'high'].includes(contextObj.riskLevel)
+            ? (contextObj.riskLevel as 'low' | 'medium' | 'high')
+            : 'medium',
       },
-      deployedAgents: body.deployedAgents,
-      agentEndpoint: body.agentEndpoint,
+      deployedAgents,
+      agentEndpoint: typeof body.agentEndpoint === 'string' ? body.agentEndpoint.slice(0, 500) : undefined,
     }
 
-    const walletAddress = body.walletAddress || '0x0000000000000000000000000000000000000000'
+    const walletAddressRaw = body.walletAddress
+    const walletAddress =
+      typeof walletAddressRaw === 'string' && isAddress(walletAddressRaw)
+        ? (walletAddressRaw as `0x${string}`)
+        : null
 
-    if (body.walletAddress) {
+    if (walletAddress) {
       try {
         const ensClient = createPublicClient({ chain: sepolia, transport: http() })
-        const ensName = await ensClient.getEnsName({ address: body.walletAddress as `0x${string}` })
+        const ensName = await ensClient.getEnsName({ address: walletAddress })
         if (ensName) {
           const [endpoint, ensRisk, ensTokens] = await Promise.all([
             !councilRequest.agentEndpoint
@@ -156,19 +179,20 @@ async function handleDeliberation(request: NextRequest): Promise<NextResponse> {
     }
     
     const result = isTokenLaunchPrompt(userPrompt)
-      ? await runTokenLaunchDeliberation(councilRequest, walletAddress)
+      ? await runTokenLaunchDeliberation(councilRequest, walletAddress ?? '0x0000000000000000000000000000000000000000')
       : await runCouncilDeliberation(councilRequest)
 
-    // Fire-and-forget: push council decisions to V4 hooks on-chain
+    // Push council decisions to V4 hooks on-chain.
     const riskLevel = (councilRequest.context.riskLevel ?? 'medium') as 'low' | 'medium' | 'high'
     const hookParams = extractHookParameters(result.deliberation, riskLevel)
-    updateHookParameters(hookParams).catch(err => console.error('[Council->Hooks] Hook update failed:', err))
+    const hookUpdate = await updateHookParameters(hookParams)
 
     return NextResponse.json({
       success: true,
       deliberation: result.deliberation,
       proposal: result.proposal,
       hookParameters: hookParams,
+      hookUpdate,
     })
   } catch (error) {
     console.error('[API] Council deliberation error:', error)
