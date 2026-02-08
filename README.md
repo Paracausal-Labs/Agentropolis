@@ -84,7 +84,7 @@ GROQ_MOCK=false
 ## 📜 Smart Contracts (Base Sepolia)
 
 | Contract | Address |
-| due | :--- |
+| :--- | :--- |
 | **Universal Router** | `0x492E6456D9528771018DeB9E87ef7750EF184104` |
 | **CouncilFeeHook** | `0xddda04328455FfbeeBb4a4Fb6ef2292c586E4080` |
 | **SwapGuardHook** | `0xA7a8c5D56E6B7318a3Fa61b71A9905e59f474080` |
