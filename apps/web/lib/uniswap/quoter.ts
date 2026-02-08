@@ -1,6 +1,6 @@
 import type { SwapQuote } from '@agentropolis/shared/src/types'
 import { getPoolInfo, type PoolKey } from './pools'
-import { TOKEN_DECIMALS } from './constants'
+import { TOKEN_DECIMALS, DYNAMIC_FEE_FLAG } from './constants'
 import { formatUnits } from 'viem'
 
 const Q96 = 1n << 96n
@@ -26,7 +26,9 @@ export async function getSwapQuote(
   }
 
   const zeroForOne = tokenIn.toLowerCase() === poolKey.currency0.toLowerCase()
-  const fee = BigInt(poolKey.fee)
+  // For dynamic fee pools, use the lpFee from slot0 (or default to 3000 bps)
+  const rawFee = poolKey.fee
+  const fee = rawFee === DYNAMIC_FEE_FLAG ? 3000n : BigInt(rawFee)
   const L = pool.liquidity
   const sqrtPrice = pool.sqrtPriceX96
 

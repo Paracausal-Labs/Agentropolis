@@ -19,7 +19,7 @@ import {
   NitroliteClient,
   WebSocketRouter,
 } from './client'
-import { YELLOW_CONTRACTS, YELLOW_DEFAULTS, formatYtestUsd } from './constants'
+import { YELLOW_CONTRACTS, YELLOW_DEFAULTS, YELLOW_CLEARNODE_URL, formatYtestUsd } from './constants'
 
 export type ChannelStatus = 
   | 'disconnected'
@@ -280,11 +280,39 @@ function createRealChannelManager(
 
     async deposit(amount = YELLOW_DEFAULTS.DEPOSIT_AMOUNT) {
       try {
-        const nitrolite = await ensureClient()
-
         console.log('[Yellow] Depositing:', formatYtestUsd(amount), 'ytest.USD')
-
         setState({ status: 'approving', error: undefined })
+
+        const userAddress = walletClient.account.address
+
+        const isSandbox = YELLOW_CLEARNODE_URL.includes('sandbox')
+        if (isSandbox) {
+          setState({ status: 'depositing' })
+          const faucetRes = await fetch('https://clearnet-sandbox.yellow.com/faucet/requestTokens', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userAddress }),
+          })
+          const faucetData = await faucetRes.json()
+
+          if (!faucetData.success) {
+            throw new Error(faucetData.message || 'Faucet request failed')
+          }
+
+          console.log('[Yellow] Sandbox faucet deposit:', faucetData.txId, faucetData.amount)
+          const faucetAmount = BigInt(faucetData.amount || amount.toString())
+
+          setState({
+            status: 'disconnected',
+            depositAmount: faucetAmount,
+            balance: faucetAmount,
+            txHash: faucetData.txId,
+          })
+
+          return faucetData.txId
+        }
+
+        const nitrolite = await ensureClient()
 
         const allowance = await nitrolite.getTokenAllowance(YELLOW_CONTRACTS.YTEST_USD)
         if (allowance < amount) {
@@ -333,7 +361,7 @@ function createRealChannelManager(
           signer,
           {
             definition: {
-              application: 'agentropolis/v1',
+              application: 'Agentropolis',
               protocol: RPCProtocolVersion.NitroRPC_0_4,
               participants: [userAddress as Hex, broker as Hex],
               weights: [1, 1],
@@ -342,7 +370,7 @@ function createRealChannelManager(
               nonce: Date.now(),
             },
             allocations: [{
-              asset: YELLOW_CONTRACTS.YTEST_USD,
+              asset: 'ytest.usd',
               amount: state.depositAmount.toString(),
               participant: userAddress,
             }],
@@ -420,7 +448,7 @@ function createRealChannelManager(
             intent: RPCAppStateIntent.Operate,
             version: stateVersion,
             allocations: [{
-              asset: YELLOW_CONTRACTS.YTEST_USD,
+              asset: 'ytest.usd',
               amount: newBalance.toString(),
               participant: userAddress,
             }],
@@ -477,7 +505,7 @@ function createRealChannelManager(
             {
               app_session_id: appSessionId,
               allocations: [{
-                asset: YELLOW_CONTRACTS.YTEST_USD,
+                asset: 'ytest.usd',
                 amount: state.balance.toString(),
                 participant: userAddress,
               }],

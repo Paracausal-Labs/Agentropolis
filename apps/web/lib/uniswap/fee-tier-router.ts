@@ -1,5 +1,5 @@
 import type { SwapQuote } from '@agentropolis/shared/src/types'
-import { COMMON_POOLS, getPoolInfo, type PoolKey } from './pools'
+import { COMMON_POOLS, HOOK_POOLS, getPoolInfo, type PoolKey } from './pools'
 import { getSwapQuote } from './quoter'
 
 export interface FeeTierResult {
@@ -18,7 +18,9 @@ export async function getBestFeeTier(
 ): Promise<FeeTierResult> {
   const candidates: FeeTierResult[] = []
 
-  for (const poolKey of COMMON_POOLS) {
+  const allPools = [...HOOK_POOLS, ...COMMON_POOLS]
+
+  for (const poolKey of allPools) {
     // Check this pool contains the right pair
     const addresses = [poolKey.currency0.toLowerCase(), poolKey.currency1.toLowerCase()]
     if (!addresses.includes(tokenIn.toLowerCase()) || !addresses.includes(tokenOut.toLowerCase())) {

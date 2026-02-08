@@ -318,7 +318,13 @@ export function SessionStatus() {
         <span className="text-xs text-[#00FF88] font-mono">{state.balance}</span>
       )}
 
-      {state.status === 'disconnected' && !state.isDeposited && (
+      {state.error && (
+        <span className="text-[10px] text-[#FF3366] font-mono max-w-[120px] truncate" title={state.error}>
+          {state.error}
+        </span>
+      )}
+
+      {(state.status === 'disconnected' || state.status === 'error') && !state.isDeposited && (
         <button
           onClick={handleDeposit}
           disabled={isLoading}

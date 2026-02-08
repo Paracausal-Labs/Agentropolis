@@ -52,7 +52,7 @@ export function AppPageContent() {
         <div className="flex items-center gap-2 pointer-events-auto">
           <div className="cyber-panel px-3 py-1.5 bg-black/70 flex items-center gap-2 text-sm">
             <span className="text-[#00FF88] text-xs">$YTEST</span>
-            <span className="font-bold">{state.ytestBalance.toFixed(2)}</span>
+            <span className="font-bold" suppressHydrationWarning>{state.ytestBalance.toFixed(2)}</span>
           </div>
         </div>
 
@@ -77,7 +77,7 @@ export function AppPageContent() {
         {renderScene()}
       </main>
 
-      {currentScene === 'city' && <SwapHandler />}
+      <SwapHandler />
       <GuestMode />
     </div>
   )

@@ -14,7 +14,6 @@ import {
 
 const RATE_LIMIT_WINDOW_MS = 60_000
 const RATE_LIMIT_MAX_REQUESTS = 5
-const AUTH_RATE_LIMIT_MAX = 20
 
 const guestRateLimits = new Map<string, { count: number; resetAt: number }>()
 

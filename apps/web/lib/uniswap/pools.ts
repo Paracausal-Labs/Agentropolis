@@ -1,28 +1,21 @@
-import { createPublicClient, http, type Address, keccak256, encodeAbiParameters } from 'viem'
+import { createPublicClient, http, type Address, keccak256, encodeAbiParameters, encodePacked, numberToHex, hexToBigInt } from 'viem'
 import { baseSepolia } from 'viem/chains'
 import { CONTRACTS, POOL_KEY, RPC_URL, TOKENS, HOOKS, DYNAMIC_FEE_FLAG } from './constants'
 
-const POOL_MANAGER_ABI = [
+// V4 PoolManager uses extsload (EIP-7702) for state reads, not regular functions
+const EXTSLOAD_ABI = [
   {
     type: 'function',
-    name: 'getSlot0',
+    name: 'extsload',
     stateMutability: 'view',
-    inputs: [{ name: 'id', type: 'bytes32' }],
-    outputs: [
-      { name: 'sqrtPriceX96', type: 'uint160' },
-      { name: 'tick', type: 'int24' },
-      { name: 'protocolFee', type: 'uint24' },
-      { name: 'lpFee', type: 'uint24' },
-    ],
-  },
-  {
-    type: 'function',
-    name: 'getLiquidity',
-    stateMutability: 'view',
-    inputs: [{ name: 'id', type: 'bytes32' }],
-    outputs: [{ name: 'liquidity', type: 'uint128' }],
+    inputs: [{ name: 'slot', type: 'bytes32' }],
+    outputs: [{ name: 'value', type: 'bytes32' }],
   },
 ] as const
+
+// StateLibrary constants (from v4-core/src/libraries/StateLibrary.sol)
+const POOLS_SLOT = '0x0000000000000000000000000000000000000000000000000000000000000006' as `0x${string}`
+const LIQUIDITY_OFFSET = 3n
 
 export interface PoolInfo {
   poolId: `0x${string}`
@@ -82,27 +75,46 @@ const getPublicClient = () =>
     transport: http(RPC_URL),
   })
 
+// Replicate StateLibrary._getPoolStateSlot: keccak256(abi.encodePacked(poolId, POOLS_SLOT))
+const getPoolStateSlot = (poolId: `0x${string}`): `0x${string}` => {
+  return keccak256(encodePacked(['bytes32', 'bytes32'], [poolId, POOLS_SLOT]))
+}
+
+// Parse packed slot0: [24 bits lpFee | 24 bits protocolFee | 24 bits tick | 160 bits sqrtPriceX96]
+const parseSlot0 = (data: `0x${string}`): { sqrtPriceX96: bigint; tick: number } => {
+  const raw = hexToBigInt(data)
+  const sqrtPriceX96 = raw & ((1n << 160n) - 1n)
+  const tickRaw = Number((raw >> 160n) & 0xFFFFFFn)
+  const tick = tickRaw >= 0x800000 ? tickRaw - 0x1000000 : tickRaw
+  return { sqrtPriceX96, tick }
+}
+
 export const getPoolInfo = async (poolKey: PoolKey): Promise<PoolInfo> => {
   const client = getPublicClient()
   const poolId = computePoolId(poolKey)
 
   try {
-    const [slot0, liquidity] = await Promise.all([
+    const stateSlot = getPoolStateSlot(poolId)
+    const liquiditySlot = numberToHex(hexToBigInt(stateSlot) + LIQUIDITY_OFFSET, { size: 32 })
+
+    const [slot0Data, liquidityData] = await Promise.all([
       client.readContract({
         address: CONTRACTS.POOL_MANAGER as Address,
-        abi: POOL_MANAGER_ABI,
-        functionName: 'getSlot0',
-        args: [poolId],
+        abi: EXTSLOAD_ABI,
+        functionName: 'extsload',
+        args: [stateSlot],
       }),
       client.readContract({
         address: CONTRACTS.POOL_MANAGER as Address,
-        abi: POOL_MANAGER_ABI,
-        functionName: 'getLiquidity',
-        args: [poolId],
+        abi: EXTSLOAD_ABI,
+        functionName: 'extsload',
+        args: [liquiditySlot],
       }),
     ])
 
-    const isInitialized = slot0[0] !== 0n
+    const { sqrtPriceX96, tick } = parseSlot0(slot0Data)
+    const liquidity = hexToBigInt(liquidityData) & ((1n << 128n) - 1n)
+    const isInitialized = sqrtPriceX96 !== 0n
 
     return {
       poolId,
@@ -111,8 +123,8 @@ export const getPoolInfo = async (poolKey: PoolKey): Promise<PoolInfo> => {
       fee: poolKey.fee,
       tickSpacing: poolKey.tickSpacing,
       hooks: poolKey.hooks,
-      sqrtPriceX96: slot0[0],
-      tick: slot0[1],
+      sqrtPriceX96,
+      tick,
       liquidity,
       isInitialized,
     }

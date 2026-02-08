@@ -5,6 +5,7 @@ import Scene3D from './Scene3D'
 import { Agent3D } from './3d/Agents'
 import { COLORS, AGENT_TYPES, PRESET_PROMPTS } from '@/lib/game-constants'
 import { useGame } from '@/contexts/GameContext'
+import { useStrategyExecutor } from '@/lib/uniswap/strategy-router'
 
 interface ChatMessage {
     id: string
@@ -35,6 +36,7 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
     const [isDeliberating, setIsDeliberating] = useState(false)
     const [opinions, setOpinions] = useState<{ agent: string; stance: string; reasoning: string; confidence?: number }[]>([])
     const [proposal, setProposal] = useState<any | null>(null)
+    const [hookParameters, setHookParameters] = useState<any | null>(null)
     const [speakingAgent, setSpeakingAgent] = useState<string | null>(null)
     const [error, setError] = useState<string | null>(null)
     const abortRef = useRef<AbortController | null>(null)
@@ -140,6 +142,7 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
         setIsDeliberating(true)
         setOpinions([])
         setProposal(null)
+        setHookParameters(null)
         setError(null)
         actions.startDeliberation()
 
@@ -177,6 +180,10 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
                 await new Promise(r => setTimeout(r, 1200))
                 setSpeakingAgent(null)
                 await new Promise(r => setTimeout(r, 300))
+            }
+
+            if (data.hookParameters) {
+                setHookParameters(data.hookParameters)
             }
 
             if (apiProposal) {
@@ -309,6 +316,54 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
                         <p className="text-xs text-gray-400 mt-1">Select an agent to interact or start a general deliberation.</p>
                     </div>
                 </div>
+
+                {/* Hook Parameters Panel */}
+                {hookParameters && (
+                    <div className="absolute top-48 left-4 w-64 pointer-events-auto animate-in slide-in-from-left duration-500 z-40">
+                        <div className="cyber-panel p-4 bg-black/90 border border-[#00F0FF]/50 clip-corner-br">
+                            <div className="flex items-center gap-2 mb-3 border-b border-[#00F0FF]/30 pb-2">
+                                <div className="w-2 h-2 bg-[#00F0FF] rounded-full animate-pulse" />
+                                <span className="text-[#00F0FF] text-xs font-bold tracking-widest">HOOK PARAMS UPDATED</span>
+                            </div>
+                            
+                            <div className="space-y-3 text-sm">
+                                <div>
+                                    <div className="text-[#00F0FF] text-[10px] uppercase tracking-wider mb-1">Dynamic Fee</div>
+                                    <div className="text-white font-mono text-lg">
+                                        {(hookParameters.feeBps / 100).toFixed(2)}%
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div className="text-[#00F0FF] text-[10px] uppercase tracking-wider mb-1">Max Swap Size</div>
+                                    <div className="text-white font-mono text-lg">
+                                        {parseFloat((Number(hookParameters.maxSwapSize) / 1e18).toString()).toFixed(2)} ETH
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div className="text-[#00F0FF] text-[10px] uppercase tracking-wider mb-1">Market Sentiment</div>
+                                    <div className="flex items-baseline gap-2">
+                                        <span className={`font-mono text-lg ${hookParameters.sentimentScore > 0 ? 'text-green-400' : hookParameters.sentimentScore < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                                            {hookParameters.sentimentScore > 0 ? '+' : ''}{hookParameters.sentimentScore}
+                                        </span>
+                                    </div>
+                                    <div className="text-gray-400 text-xs italic mt-1 leading-tight">
+                                        &ldquo;{hookParameters.sentimentReason}&rdquo;
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="mt-3 pt-2 border-t border-[#00F0FF]/30">
+                                <div className="flex items-center gap-2 text-[10px] text-[#00F0FF]">
+                                    <span>ON-CHAIN SYNC</span>
+                                    <span className="flex-1 h-px bg-[#00F0FF]/50"></span>
+                                    <span>✓</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Right Panel: Chat or Intro */}
                 {selectedAgent && (
@@ -495,12 +550,37 @@ function RoundTable() {
 
 function ProposalCard({ proposal, onResolve }: { proposal: any, onResolve: () => void }) {
     const { actions } = useGame()
+    const { execute } = useStrategyExecutor()
+    const [executing, setExecuting] = useState(false)
+    const [swapResult, setSwapResult] = useState<{ status: string; txHash?: string; error?: string } | null>(null)
     const votes = proposal.votes || { support: 0, oppose: 0, abstain: 0 }
     const totalVotes = votes.support + votes.oppose + votes.abstain
 
-    const handleExecute = () => {
+    const handleExecute = async () => {
         actions.executeProposal(proposal.id)
-        onResolve()
+
+        const apiProposal = proposal._apiProposal
+        if (apiProposal) {
+            setExecuting(true)
+            try {
+                const result = await execute(apiProposal)
+                if (result.success) {
+                    setSwapResult({ status: 'success', txHash: result.txHash })
+                    console.log('[CouncilRoom] Swap executed:', result.txHash)
+                } else {
+                    setSwapResult({ status: 'error', error: result.error })
+                    console.error('[CouncilRoom] Swap failed:', result.error)
+                }
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : 'Unknown error'
+                setSwapResult({ status: 'error', error: msg })
+                console.error('[CouncilRoom] Swap error:', err)
+            } finally {
+                setExecuting(false)
+            }
+        } else {
+            onResolve()
+        }
     }
 
     const riskColor = proposal.risk === 'low' ? '#00FF00' : proposal.risk === 'high' ? '#FF0000' : '#FFA500'
@@ -553,13 +633,33 @@ function ProposalCard({ proposal, onResolve }: { proposal: any, onResolve: () =>
                 </div>
 
                 <div className="flex gap-4">
-                    <button onClick={handleExecute} className="flex-1 btn-cyber h-14 text-lg">
-                        AUTHORIZE EXECUTION
+                    <button onClick={handleExecute} disabled={executing} className="flex-1 btn-cyber h-14 text-lg disabled:opacity-50">
+                        {executing ? 'EXECUTING...' : 'AUTHORIZE EXECUTION'}
                     </button>
-                    <button onClick={onResolve} className="flex-1 btn-cyber-outline h-14 text-lg border-red-500 text-red-500 hover:bg-red-500 hover:text-white">
+                    <button onClick={onResolve} disabled={executing} className="flex-1 btn-cyber-outline h-14 text-lg border-red-500 text-red-500 hover:bg-red-500 hover:text-white disabled:opacity-50">
                         REJECT
                     </button>
                 </div>
+
+                {swapResult && (
+                    <div className={`mt-4 p-3 border ${swapResult.status === 'success' ? 'border-green-500 text-green-400' : 'border-red-500 text-red-400'}`}>
+                        {swapResult.status === 'success' ? (
+                            <div>
+                                <div className="font-bold">Swap Executed!</div>
+                                {swapResult.txHash && (
+                                    <a href={`https://sepolia.basescan.org/tx/${swapResult.txHash}`} target="_blank" rel="noopener noreferrer" className="underline text-sm">
+                                        View on BaseScan
+                                    </a>
+                                )}
+                            </div>
+                        ) : (
+                            <div>
+                                <div className="font-bold">Swap Failed</div>
+                                <div className="text-sm">{swapResult.error}</div>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     )

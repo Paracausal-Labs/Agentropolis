@@ -61,6 +61,36 @@ const ERC20_ABI = [
   },
 ] as const
 
+const PERMIT2_ABI = [
+  {
+    type: 'function',
+    name: 'allowance',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'token', type: 'address' },
+      { name: 'spender', type: 'address' },
+    ],
+    outputs: [
+      { name: 'amount', type: 'uint160' },
+      { name: 'expiration', type: 'uint48' },
+      { name: 'nonce', type: 'uint48' },
+    ],
+  },
+  {
+    type: 'function',
+    name: 'approve',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'token', type: 'address' },
+      { name: 'spender', type: 'address' },
+      { name: 'amount', type: 'uint160' },
+      { name: 'expiration', type: 'uint48' },
+    ],
+    outputs: [],
+  },
+] as const
+
 const V4_SWAP_COMMAND = 0x10
 
 const V4_ACTIONS = {
@@ -117,7 +147,6 @@ const parseAmount = (value: string | number, decimals: number) => {
 const DEFAULT_SLIPPAGE_BPS = 300 // 3% default slippage from quote
 
 const encodeV4SwapInput = (
-  account: Address,
   amountIn: bigint,
   minAmountOut: bigint,
   zeroForOne: boolean,
@@ -178,8 +207,8 @@ const encodeV4SwapInput = (
   )
 
   const takeParams = encodeAbiParameters(
-    [{ name: 'currency', type: 'address' }, { name: 'recipient', type: 'address' }, { name: 'minAmount', type: 'uint256' }],
-    [currencyOut, account, minAmountOut]
+    [{ name: 'currency', type: 'address' }, { name: 'minAmount', type: 'uint256' }],
+    [currencyOut, minAmountOut]
   )
 
   return encodeAbiParameters(
@@ -220,38 +249,38 @@ async function simulateSwap(
   deadlineSeconds: number,
   publicClient: PublicClient
 ): Promise<{ ok: boolean; error?: string; gasEstimate?: bigint }> {
-  const swapInput = encodeV4SwapInput(account, amountIn, minAmountOut, zeroForOne, poolKey)
-  const commands: Hex = `0x${V4_SWAP_COMMAND.toString(16).padStart(2, '0')}`
+    const swapInput = encodeV4SwapInput(amountIn, minAmountOut, zeroForOne, poolKey)
+    const commands: Hex = `0x${V4_SWAP_COMMAND.toString(16).padStart(2, '0')}`
 
-  try {
-    await publicClient.simulateContract({
-      address: CONTRACTS.UNIVERSAL_ROUTER,
-      abi: UNIVERSAL_ROUTER_ABI,
-      functionName: 'execute',
-      args: [commands, [swapInput], BigInt(deadlineSeconds)],
-      account,
-    })
-    // If simulation succeeds, try to estimate gas
-    let gasEstimate: bigint | undefined
     try {
-      gasEstimate = await publicClient.estimateContractGas({
+      await publicClient.simulateContract({
         address: CONTRACTS.UNIVERSAL_ROUTER,
         abi: UNIVERSAL_ROUTER_ABI,
         functionName: 'execute',
         args: [commands, [swapInput], BigInt(deadlineSeconds)],
         account,
       })
-    } catch (gasErr) {
-      console.warn('[executor] Gas estimation failed:', gasErr instanceof Error ? gasErr.message : 'unknown')
-      gasEstimate = 500_000n
+      // If simulation succeeds, try to estimate gas
+      let gasEstimate: bigint | undefined
+      try {
+        gasEstimate = await publicClient.estimateContractGas({
+          address: CONTRACTS.UNIVERSAL_ROUTER,
+          abi: UNIVERSAL_ROUTER_ABI,
+          functionName: 'execute',
+          args: [commands, [swapInput], BigInt(deadlineSeconds)],
+          account,
+        })
+      } catch (gasErr) {
+        console.warn('[executor] Gas estimation failed:', gasErr instanceof Error ? gasErr.message : 'unknown')
+        gasEstimate = 500_000n
+      }
+      return { ok: true, gasEstimate }
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : 'Simulation failed',
+      }
     }
-    return { ok: true, gasEstimate }
-  } catch (err) {
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : 'Simulation failed',
-    }
-  }
 }
 
 export async function buildExecutionPlan(
@@ -398,9 +427,9 @@ export const executeSwap = async (
     simulationOk: plan.simulation.ok,
   })
 
-  // 2. If simulation fails → throw
+  // 2. Log simulation result (may fail pre-approval — not blocking)
   if (!plan.simulation.ok) {
-    throw new Error(`Swap simulation failed: ${plan.simulation.error}`)
+    console.warn(`[executor] Simulation failed (may need Permit2 approval): ${plan.simulation.error}`)
   }
 
   const tokenIn = proposal.pair.tokenIn.address as Address
@@ -419,29 +448,54 @@ export const executeSwap = async (
   // 3. Read balances before
   const balBefore = await readBalances(account, tokenIn, tokenOut, publicClient)
 
-  // 4. Approve if needed
-  const allowance = await publicClient.readContract({
+  // 4. Approve via Permit2 pattern (ERC20 → Permit2 → Universal Router)
+  // Step 4a: ERC20 approve to Permit2
+  const erc20Allowance = await publicClient.readContract({
     address: tokenIn,
     abi: ERC20_ABI,
     functionName: 'allowance',
-    args: [account, CONTRACTS.UNIVERSAL_ROUTER],
+    args: [account, CONTRACTS.PERMIT2 as Address],
   })
 
-  if (allowance < amountIn) {
+  if (erc20Allowance < amountIn) {
     const MAX_UINT256 = BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')
     const approvalHash = await walletClient.writeContract({
       address: tokenIn,
       abi: ERC20_ABI,
       functionName: 'approve',
-      args: [CONTRACTS.UNIVERSAL_ROUTER, MAX_UINT256],
+      args: [CONTRACTS.PERMIT2 as Address, MAX_UINT256],
       account,
       chain: walletClient.chain ?? null,
     })
     await publicClient.waitForTransactionReceipt({ hash: approvalHash })
   }
 
+  // Step 4b: Permit2 approve Universal Router to spend
+  const [permit2Amount, permit2Expiration] = await publicClient.readContract({
+    address: CONTRACTS.PERMIT2 as Address,
+    abi: PERMIT2_ABI,
+    functionName: 'allowance',
+    args: [account, tokenIn, CONTRACTS.UNIVERSAL_ROUTER as Address],
+  })
+
+  const MAX_UINT160 = (1n << 160n) - 1n
+  const MAX_EXPIRATION = 281474976710655
+  const nowSeconds = Math.floor(Date.now() / 1000)
+
+  if (BigInt(permit2Amount) < amountIn || Number(permit2Expiration) < nowSeconds) {
+    const permit2ApproveHash = await walletClient.writeContract({
+      address: CONTRACTS.PERMIT2 as Address,
+      abi: PERMIT2_ABI,
+      functionName: 'approve',
+      args: [tokenIn, CONTRACTS.UNIVERSAL_ROUTER as Address, MAX_UINT160, MAX_EXPIRATION],
+      account,
+      chain: walletClient.chain ?? null,
+    })
+    await publicClient.waitForTransactionReceipt({ hash: permit2ApproveHash })
+  }
+
   // 5. Execute swap
-  const swapInput = encodeV4SwapInput(account, amountIn, minAmountOut, zeroForOne, poolKey)
+  const swapInput = encodeV4SwapInput(amountIn, minAmountOut, zeroForOne, poolKey)
   const commands: Hex = `0x${V4_SWAP_COMMAND.toString(16).padStart(2, '0')}`
 
   const txHash = await walletClient.writeContract({

@@ -3,21 +3,22 @@ import {
   WalletStateSigner,
   createAuthRequestMessage,
   createAuthVerifyMessage,
-  createGetConfigMessageV2,
   parseAnyRPCResponse,
-  parseGetConfigResponse,
   generateRequestId,
   RPCMethod,
   createEIP712AuthMessageSigner,
+  createECDSAMessageSigner,
 } from '@erc7824/nitrolite'
 import type {
   NitroliteClientConfig,
   MessageSigner,
   RPCResponse,
   AuthChallengeResponse,
+  AssetsResponse,
 } from '@erc7824/nitrolite'
-import type { PublicClient, WalletClient, Chain, Account, Transport, Address } from 'viem'
-import { YELLOW_CONTRACTS, YELLOW_CLEARNODE_URL, YELLOW_CHAIN_ID } from './constants'
+import type { PublicClient, WalletClient, Chain, Account, Transport, Address, Hex } from 'viem'
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
+import { YELLOW_CONTRACTS, YELLOW_CLEARNODE_URL, YELLOW_CHAIN_ID, YELLOW_DEFAULTS } from './constants'
 
 export { YELLOW_CLEARNODE_URL }
 export { NitroliteClient, WalletStateSigner }
@@ -145,29 +146,36 @@ export class WebSocketRouter {
 
 // ─── Auth + Connection ──────────────────────────────────────────────────
 
-/**
- * Create a MessageSigner from a WalletClient for RPC message signing.
- * This is used by createAppSessionMessage, createSubmitAppStateMessage, etc.
- */
-export function createMessageSigner(walletClient: WalletClient<Transport, Chain, Account>): MessageSigner {
-  return createEIP712AuthMessageSigner(
-    walletClient as unknown as Parameters<typeof createEIP712AuthMessageSigner>[0],
-    {
-      scope: 'app',
-      session_key: walletClient.account.address,
-      expires_at: BigInt(Math.floor(Date.now() / 1000) + 86400),
-      allowances: [],
-    },
-    { name: 'Agentropolis' }
-  )
+// Ephemeral session key for signing non-auth RPC messages (no wallet prompts)
+let sessionPrivateKey: Hex | null = null
+
+function getOrCreateSessionKey(): { privateKey: Hex; address: Address } {
+  if (!sessionPrivateKey) {
+    sessionPrivateKey = generatePrivateKey()
+  }
+  const account = privateKeyToAccount(sessionPrivateKey)
+  return { privateKey: sessionPrivateKey, address: account.address }
+}
+
+export function createMessageSigner(_walletClient: WalletClient<Transport, Chain, Account>): MessageSigner {
+  const { privateKey } = getOrCreateSessionKey()
+  return createECDSAMessageSigner(privateKey)
 }
 
 /**
- * Fetch Clearnode config using the SDK's get_config RPC.
- * Uses a temporary WebSocket since we don't have an auth'd connection yet.
+ * Fetch Clearnode config.
+ * 
+ * The sandbox clearnode (clearnet-sandbox.yellow.com) sends an `assets` welcome
+ * message on connect instead of supporting `get_config`. We detect this and build
+ * a ClearnodeConfig from the assets response + hardcoded contract addresses.
+ * 
+ * For production clearnodes, `get_config` may still work — we try to parse
+ * whatever the first message is and handle both cases.
  */
 export async function getClearnodeConfig(): Promise<ClearnodeConfig> {
   if (cachedConfig) return cachedConfig
+
+  const isSandbox = YELLOW_CLEARNODE_URL.includes('sandbox')
 
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(YELLOW_CLEARNODE_URL)
@@ -177,35 +185,88 @@ export async function getClearnodeConfig(): Promise<ClearnodeConfig> {
     }, 10000)
 
     ws.onopen = () => {
-      // get_config is unauthenticated — use V2 (no signer needed)
-      const msg = createGetConfigMessageV2()
-      ws.send(msg)
+      // Sandbox sends `assets` welcome automatically — no need to send anything.
+      // For non-sandbox, we could send get_config, but for now we wait for
+      // whatever the server sends first.
+      console.log('[Yellow] Connected to clearnode, waiting for config/assets...')
     }
 
     ws.onmessage = (event) => {
       clearTimeout(timeout)
       try {
-        const response = parseGetConfigResponse(event.data as string)
+        const raw = typeof event.data === 'string' ? event.data : String(event.data)
+        const response = parseAnyRPCResponse(raw)
 
-        if (!response.params?.brokerAddress) {
+        if (response.method === RPCMethod.Assets || response.method === RPCMethod.GetAssets) {
+          // Sandbox: build config from assets welcome message
+          const assetsResp = response as AssetsResponse
+          const assets = assetsResp.params?.assets || []
+          
+          console.log('[Yellow] Received assets welcome:', assets.length, 'assets')
+
+          // Extract chain info from assets — use the first asset's chainId
+          const chainIds = [...new Set(assets.map(a => a.chainId))]
+
+          cachedConfig = {
+            // Sandbox doesn't provide a broker address in the assets message.
+            // The broker is the clearnode itself — its address will be provided
+            // in the auth_challenge flow. Use a placeholder for now.
+            brokerAddress: YELLOW_CONTRACTS.CUSTODY as Address,
+            networks: chainIds.map(chainId => ({
+              chainId,
+              name: chainId === YELLOW_CHAIN_ID ? 'Base Sepolia' : `Chain ${chainId}`,
+              custodyAddress: YELLOW_CONTRACTS.CUSTODY,
+              adjudicatorAddress: YELLOW_CONTRACTS.ADJUDICATOR,
+            }))
+          }
+
+          console.log('[Yellow] Clearnode config (from assets):', cachedConfig)
           ws.close()
-          reject(new Error('Invalid config response: missing brokerAddress'))
-          return
-        }
+          resolve(cachedConfig)
+        } else if (response.method === RPCMethod.GetConfig) {
+          // Production clearnode: standard get_config response
+          const configResp = response as { params: { brokerAddress: Address; networks: Array<{ chainId: number; name: string; custodyAddress: Address; adjudicatorAddress: Address }> } }
 
-        cachedConfig = {
-          brokerAddress: response.params.brokerAddress,
-          networks: (response.params.networks || []).map(n => ({
-            chainId: n.chainId,
-            name: n.name,
-            custodyAddress: n.custodyAddress,
-            adjudicatorAddress: n.adjudicatorAddress,
-          }))
-        }
+          if (!configResp.params?.brokerAddress) {
+            ws.close()
+            reject(new Error('Invalid config response: missing brokerAddress'))
+            return
+          }
 
-        console.log('[Yellow] Clearnode config:', cachedConfig)
-        ws.close()
-        resolve(cachedConfig)
+          cachedConfig = {
+            brokerAddress: configResp.params.brokerAddress,
+            networks: (configResp.params.networks || []).map(n => ({
+              chainId: n.chainId,
+              name: n.name,
+              custodyAddress: n.custodyAddress,
+              adjudicatorAddress: n.adjudicatorAddress,
+            }))
+          }
+
+          console.log('[Yellow] Clearnode config (from get_config):', cachedConfig)
+          ws.close()
+          resolve(cachedConfig)
+        } else {
+          // Unknown first message — if sandbox, use defaults
+          console.warn('[Yellow] Unexpected first message:', response.method)
+          if (isSandbox) {
+            cachedConfig = {
+              brokerAddress: YELLOW_CONTRACTS.CUSTODY as Address,
+              networks: [{
+                chainId: YELLOW_CHAIN_ID,
+                name: 'Base Sepolia',
+                custodyAddress: YELLOW_CONTRACTS.CUSTODY,
+                adjudicatorAddress: YELLOW_CONTRACTS.ADJUDICATOR,
+              }]
+            }
+            console.log('[Yellow] Using sandbox defaults:', cachedConfig)
+            ws.close()
+            resolve(cachedConfig)
+          } else {
+            ws.close()
+            reject(new Error(`Unexpected clearnode response: ${response.method}`))
+          }
+        }
       } catch (e) {
         ws.close()
         reject(e)
@@ -241,28 +302,79 @@ export async function connectAndAuth(
   const userAddress = walletClient.account.address
   const brokerAddress = config.brokerAddress
 
+  const earlyMessages: MessageEvent[] = []
+  let routerReady = false
+
   const ws = await new Promise<WebSocket>((resolve, reject) => {
     const socket = new WebSocket(YELLOW_CLEARNODE_URL)
     const timer = setTimeout(() => {
       socket.close()
       reject(new Error('WebSocket connection timeout'))
     }, 10_000)
+
+    // Buffer any messages that arrive before the router takes over
+    socket.onmessage = (event) => {
+      if (!routerReady) {
+        earlyMessages.push(event)
+      }
+    }
+
     socket.onopen = () => { clearTimeout(timer); resolve(socket) }
     socket.onerror = (e) => { clearTimeout(timer); reject(e) }
   })
 
   const router = new WebSocketRouter(ws)
+
+  // Handle server-initiated pushes (assets welcome, pings, balance updates)
+  router.onPush((msg) => {
+    if (msg.method === RPCMethod.Ping) {
+      const pongData = JSON.stringify({
+        res: [msg.requestId ?? 0, 'pong', {}, Math.floor(Date.now() / 1000)],
+        sig: [],
+      })
+      router.sendNoWait(pongData)
+    } else if (msg.method === RPCMethod.Assets) {
+      console.log('[Yellow] Received assets push (welcome)')
+    } else {
+      console.log('[Yellow] Server push:', msg.method)
+    }
+  })
+
+  routerReady = true
+  ws.onmessage = null
+
+  for (const event of earlyMessages) {
+    ws.dispatchEvent(new MessageEvent('message', { data: event.data }))
+  }
+
+  const sessionKey = getOrCreateSessionKey()
+  const expiresAt = BigInt(Math.floor(Date.now() / 1000) + 86400)
+  const allowances = [
+    { asset: 'ytest.usd', amount: YELLOW_DEFAULTS.DEPOSIT_AMOUNT.toString() },
+  ]
+
+  const authSigner = createEIP712AuthMessageSigner(
+    walletClient as unknown as Parameters<typeof createEIP712AuthMessageSigner>[0],
+    {
+      scope: 'app',
+      session_key: sessionKey.address,
+      expires_at: expiresAt,
+      allowances,
+    },
+    { name: 'Agentropolis' }
+  )
   const messageSigner = createMessageSigner(walletClient)
 
-  // Step 1: Send auth_request
+  await new Promise(r => setTimeout(r, 200))
+
   const authReqId = generateRequestId()
   const authRequestMsg = await createAuthRequestMessage(
     {
       address: userAddress,
-      session_key: userAddress,
+      session_key: sessionKey.address,
       application: 'Agentropolis',
-      allowances: [],
-      expires_at: BigInt(Math.floor(Date.now() / 1000) + 86400),
+      allowances,
+      expires_at: expiresAt,
       scope: 'app',
     },
     authReqId,
@@ -278,10 +390,9 @@ export async function connectAndAuth(
 
   const challenge = challengeResponse as AuthChallengeResponse
 
-  // Step 2: Sign and send auth_verify
   const authVerifyId = generateRequestId()
   const authVerifyMsg = await createAuthVerifyMessage(
-    messageSigner,
+    authSigner,
     challenge,
     authVerifyId,
   )
@@ -301,17 +412,6 @@ export async function connectAndAuth(
   }
 
   console.log('[Yellow] Authenticated with clearnode as', userAddress)
-
-  // Handle server-initiated pings
-  router.onPush((msg) => {
-    if (msg.method === RPCMethod.Ping) {
-      const pongData = JSON.stringify({
-        res: [msg.requestId ?? 0, 'pong', {}, Math.floor(Date.now() / 1000)],
-        sig: [],
-      })
-      router.sendNoWait(pongData)
-    }
-  })
 
   return { router, messageSigner, brokerAddress }
 }
