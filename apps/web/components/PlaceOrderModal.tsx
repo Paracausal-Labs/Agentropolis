@@ -18,6 +18,8 @@ export interface LimitOrder {
     amount: string
     status: 'construction' | 'active' | 'completed'
     createdAt: number
+    txHash?: string
+    filledAt?: number
 }
 
 const TOKENS = [

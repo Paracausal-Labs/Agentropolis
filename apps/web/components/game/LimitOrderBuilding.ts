@@ -42,7 +42,7 @@ export class LimitOrderBuilding extends Phaser.GameObjects.Container {
 
     private getStatusLabel(): string {
         const tokenOut = this.order.tokenOut.includes('WETH') ? 'ETH' : 'USDC'
-        return `${this.order.direction === 'buy' ? 'Buy' : 'Sell'} @ $${this.order.targetPrice}`
+        return `${this.order.direction === 'buy' ? 'Buy' : 'Sell'} ${tokenOut} @ $${this.order.targetPrice}`
     }
 
     private drawBuilding() {
