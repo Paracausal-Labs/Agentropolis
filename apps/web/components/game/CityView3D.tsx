@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import Scene3D from './Scene3D'
 import { Building, Road, Ground, StreetLamp } from './3d/Buildings'
@@ -300,24 +300,29 @@ function AgentPanel({
         description: ''
     })
     const [customAgents, setCustomAgents] = useState<{ id: string; name: string; strategy: string; reputation: number; type: string; txHash?: string }[]>([])
+    const processedHashRef = useRef<string | null>(null)
+    const formDataRef = useRef(formData)
+    formDataRef.current = formData
     
     const { isConnected } = useAccount()
     const { data: hash, writeContract, isPending } = useWriteContract()
     const { isLoading: isConfirming, isSuccess, data: receipt } = useWaitForTransactionReceipt({ hash })
 
     useEffect(() => {
-        if (isSuccess && receipt) {
+        if (isSuccess && receipt && hash && processedHashRef.current !== hash) {
+            processedHashRef.current = hash
             const transferLog = receipt.logs[0]
             if (transferLog && transferLog.topics[3]) {
                 const tokenId = parseInt(transferLog.topics[3], 16)
                 addUserAgentTokenId(tokenId)
 
+                const fd = formDataRef.current
                 const newAgent = {
                     id: tokenId.toString(),
-                    name: formData.name,
-                    strategy: formData.strategy,
+                    name: fd.name || `Agent #${tokenId}`,
+                    strategy: fd.strategy,
                     reputation: 50,
-                    type: formData.strategy === 'dca' || formData.strategy === 'arbitrage' ? 'alphaHunter' : 'macroOracle',
+                    type: fd.strategy === 'dca' || fd.strategy === 'arbitrage' ? 'alphaHunter' : 'macroOracle',
                     txHash: hash
                 }
                 
@@ -326,14 +331,14 @@ function AgentPanel({
                 fetch('/api/agents/metadata', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ tokenId, metadata: formData })
+                    body: JSON.stringify({ tokenId, metadata: fd })
                 }).catch(e => console.error('Failed to update metadata', e))
 
                 setIsCreating(false)
                 setFormData({ name: '', strategy: 'dca', riskTolerance: 'moderate', description: '' })
             }
         }
-    }, [isSuccess, receipt, hash, formData])
+    }, [isSuccess, receipt, hash])
 
     const handleRegister = async () => {
         if (!isConnected) return
