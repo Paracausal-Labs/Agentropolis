@@ -97,6 +97,7 @@ export default function CityView3D({ onEnterCouncil }: CityView3DProps) {
     return (
         <div className="w-full h-full relative">
             {/* 3D Scene */}
+            <div style={showMarketplace ? { visibility: 'hidden' } : undefined}>
             <Scene3D
                 cameraPosition={[22, 22, 22]}
                 cameraMode="isometric"
@@ -159,8 +160,7 @@ export default function CityView3D({ onEnterCouncil }: CityView3DProps) {
                 {/* Effects */}
                 {showDeployEffect && <DeploymentEffect position={showDeployEffect} />}
             </Scene3D>
-
-
+            </div>
 
             {/* Deployment Panel (Right Side) */}
             <div className="absolute top-12 right-4 w-72 max-h-[calc(100vh-6rem)] overflow-y-auto cyber-panel clip-corner-all bg-black/90">
