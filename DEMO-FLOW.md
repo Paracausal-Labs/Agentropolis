@@ -1,76 +1,106 @@
-# Agentropolis Demo Flow (4 minutes)
+# Agentropolis — Demo Voiceover Script (~3:56)
 
-## Structure: Problem > Solution > Live Demo > Architecture > Impact
-
----
-
-## [0:00 - 0:20] HOOK - The Problem (20s)
-
-> "DeFi trading today is blind. You approve swaps with no risk analysis, no sentiment check, no guardrails. What if AI agents could deliberate your trades before execution — and enforce their decisions on-chain through Uniswap v4 hooks?"
+> **Instructions**: This is a voiceover script for a pre-recorded demo video. Read each section during the matching timestamp. Pace is conversational — about 140-150 words per minute. Pauses are noted where the screen needs to breathe.
 
 ---
 
-## [0:20 - 0:50] SHOW THE CITY (30s)
+## [0:00 – 0:16] Landing Page + Docs (16s)
 
-- Open the app, show the cyberpunk 3D city
-- Quick wallet connect on Base Sepolia
-- "This is Agentropolis — a gamified DeFi command center"
-- Deploy 2 agents from the ERC-8004 registry (show the marketplace pulling real on-chain agents)
-- "Each agent is an NFT on the ERC-8004 Identity Registry"
+> "Agentropolis — a gamified DeFi command center where AI agents deliberate your trades and enforce decisions on-chain through Uniswap v4 hooks. Deploy agents into a cyberpunk city, they debate in a council room, reach consensus, and the trade executes on Base Sepolia. Let's walk through it."
 
 ---
 
-## [0:50 - 1:30] YELLOW SESSION (40s) — $15k moment
+## [0:16 – 0:28] The City (12s)
 
-- Click deposit — show ytest.USD arriving via Yellow faucet
-- Click "Start Session" — show the WebSocket connecting to clearnode
-- Deploy an agent — "That cost 0.01 ytest.USD — but no gas. It's an off-chain state channel update through Yellow Network"
-- "Every micro-action in the city — deploying agents, voting — runs gas-free through Yellow's ClearSync protocol. Only settlement hits the chain."
+> "This is the city — a fully 3D isometric environment built with React Three Fiber. Every building, street lamp, and agent is rendered in real-time. This is your home screen — manage agents, collect rewards, launch strategies."
 
 ---
 
-## [1:30 - 2:30] COUNCIL DELIBERATION + SWAP (60s) — Main event
+## [0:29 – 0:40] Connecting Wallet (12s)
 
-- Enter Council Room — type **"Swap 10 USDC to WETH"**
-- Show 5 agents deliberating in real-time (Groq LLM):
-  - Alpha Hunter supports
-  - Risk Sentinel raises concerns
-  - Devil's Advocate challenges
-- Show the consensus card: vote tally, risk level, expected output
-- **KEY MOMENT**: Show the Hook Params panel (left side)
-  - "These parameters are being pushed ON-CHAIN to our v4 hooks RIGHT NOW"
-  - Dynamic Fee: varies based on consensus (contested = higher fee)
-  - Max Swap Size: risk guardrail from Risk Sentinel
-  - Sentiment score: on-chain market sentiment
-- Click APPROVE — show the swap executing through Universal Router
-- Show BaseScan tx: "10 USDC to 0.049 WETH, routed through our CouncilFeeHook, SwapGuardHook, and SentimentOracleHook"
+> "We're connecting to Base Sepolia. Once the wallet's connected, the city comes alive — our deployment panel unlocks, and we can start interacting with on-chain contracts."
 
 ---
 
-## [2:30 - 3:10] ENS INTEGRATION (40s) — $5k moment
+## [0:41 – 0:54] Yellow Network Session (13s)
 
-- Open Agent Settings — "If I have an ENS name, I can store my custom AI agent's endpoint as an ENS text record"
-- Show the `com.agentropolis.endpoint` text record concept
-- "Next time the council deliberates, it auto-discovers my custom agent from ENS and includes it in the discussion"
-- "Your ENS name IS your DeFi identity — risk preferences, preferred tokens, custom agents — all stored on-chain in text records"
+> "What we're approving is a Yellow Network state channel deposit. Once this session starts, every micro-action — deploying agents, voting, collecting coins — happens off-chain through Yellow's ClearSync. No gas per action. Only settlement hits the chain."
 
 ---
 
-## [3:10 - 3:50] ARCHITECTURE + HOOKS DEEP DIVE (40s)
+## [0:55 – 1:25] Creating & Deploying an Agent (30s)
 
-- Show the architecture diagram
-- "Three custom Uniswap v4 hooks, all deployed on Base Sepolia":
-  - **CouncilFeeHook**: Dynamic fees based on council consensus (unanimous = 0.05%, vetoed = 1%)
-  - **SwapGuardHook**: Max swap size enforcement from Risk Sentinel
-  - **SentimentOracleHook**: On-chain sentiment verification
-- "30 Forge tests passing. Every hook is battle-tested."
-- Flash the contract addresses on screen
+> "We're creating a new agent — name, strategy, risk tolerance — and when we register, it mints a real ERC-721 NFT on the ERC-8004 Identity Registry. On-chain identity with metadata embedded."
+
+> "Once registered, we deploy it into the city. That cyan sparkle — that's the agent spawning. Each agent has unique shapes and neon colors based on its role — cosmetics tied to identity. The vision is a full SimScape: agents autonomously roaming, executing micro-strategies, collecting yield — all gas-free through Yellow Network. A living, breathing DeFi city."
 
 ---
 
-## [3:50 - 4:00] CLOSE (10s)
+## [1:25 – 1:37] Agent Running & Collecting Coins (12s)
 
-> "Agentropolis: AI agents deliberate, Uniswap v4 hooks enforce, Yellow Network scales, ENS identifies. DeFi with guardrails."
+> "Watch the agent walk the streets autonomously — following a path graph between city nodes. When it passes a coin, it collects it. Bronze, silver, gold — each worth different $YTEST amounts. The gameplay loop in action."
+
+---
+
+## [1:38 – 1:47] Agent Marketplace (9s)
+
+> "This is our Agent Marketplace — every agent here is pulled live from the ERC-8004 on-chain registry. You can see their strategy, risk tolerance, reputation score, and registry source. These aren't mock entries — they're real NFTs."
+
+---
+
+## [1:47 – 1:55] BaseScan — NFT Minted (8s)
+
+> "And here it is on BaseScan — the agent we just created, minted as a token on contract 0x8004. Full metadata on-chain: name, strategy, risk profile. Verifiable by anyone."
+
+---
+
+## [2:01 – 2:32] Limit Order Hook + Building (31s)
+
+> "Now let's talk about limit orders. See these towers in the city? Each one represents a limit order. When you place an order, a tower appears — gray while pending, blue when the market's close to your target, and gold when it fills. You can click to claim."
+
+> "This is designed as a Uniswap v4 hook. On testnet we're running a mocked version — the lifecycle is simulated locally. But the hook architecture and contract code are production-ready and tested. The visual metaphor is the key — your orders literally become structures in your city."
+
+---
+
+## [2:34 – 2:44] Entering Council Room (10s)
+
+> "Now we step into the Council Room — this is where the real magic happens. Five AI agents sit around this table, each with a distinct role: Alpha Hunter, Risk Sentinel, Macro Oracle, Devil's Advocate, and Council Clerk."
+
+---
+
+## [2:45 – 2:56] Individual Agent Chat — Risk Sentinel (11s)
+
+> "You can click any agent to chat one-on-one before running the full council. Here we're clicking the Risk Sentinel — see the profile, establish the uplink, and ask it anything directly. Individual A2A deliberation."
+
+---
+
+## [2:57 – 3:12] Full Council Deliberation (15s)
+
+> "Now we type 'Swap 10 USDC to WETH' and convene the full council. Each agent deliberates one by one through Groq's Llama 3.3 70B. Alpha Hunter spots the opportunity, Risk Sentinel flags concerns, Devil's Advocate pushes back. Real-time multi-agent consensus."
+
+---
+
+## [3:13 – 3:22] Consensus Popup + Approve (9s)
+
+> "Council reaches consensus. Vote tally — support, oppose, abstain — risk level, expected output. On the left, the Hook Parameters panel just slid in — dynamic fee, max swap size, sentiment — all pushed on-chain to our v4 hooks right now."
+
+---
+
+## [3:23 – 3:38] Executing the Swap (15s)
+
+> "We authorize execution. The swap routes through our Universal Router, passing through three custom v4 hooks. CouncilFeeHook adjusts fees based on vote consensus. SwapGuardHook enforces the Risk Sentinel's max trade size. SentimentOracleHook records market sentiment on-chain. Three hooks, all deployed, 30 passing Forge tests."
+
+---
+
+## [3:39 – 3:41] Swap Success (2s)
+
+> "Swap confirmed."
+
+---
+
+## [3:42 – 3:55] BaseScan Verification + Close (13s)
+
+> "There it is on BaseScan — the swap transaction, routed through our hooks on Base Sepolia. Every parameter the council set, verifiable on-chain. That's Agentropolis — AI agents deliberate, v4 hooks enforce, Yellow Network scales. This was Team Paracausal. Thank you."
 
 ---
 
@@ -92,7 +122,7 @@
 | Feature              | Why                                        |
 |----------------------|--------------------------------------------|
 | DCA strategy         | Executes as single swap, not scheduled     |
-| Limit orders         | Mock-only (localStorage), no real hook     |
+| Limit orders (live)  | Mock-only (localStorage), explain as designed hook |
 | LP positions         | Disabled on testnet                        |
 | Type "DCA" in prompt | Will work but logs a warning               |
 
@@ -109,7 +139,9 @@
 - [ ] `.env.local` has `GROQ_API_KEY` set (not mock mode)
 - [ ] `.env.local` has `NEXT_PUBLIC_UNISWAP_MOCK=false`
 - [ ] Yellow session tested (deposit + start works)
-- [ ] Council deliberation tested (returns WETH not USDC for output)
+- [ ] Council deliberation tested (returns approval, not veto)
 - [ ] Swap execution tested (tx confirms on BaseScan)
 - [ ] ERC-8004 marketplace loads real agents
 - [ ] Clear localStorage before recording (fresh state)
+- [ ] Test prompt "Swap 10 USDC to WETH" produces majority approval
+- [ ] Limit order towers visible in city (place one beforehand)
