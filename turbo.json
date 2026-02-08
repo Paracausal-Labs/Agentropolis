@@ -1,6 +1,13 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": ["**/.env", "**/.env.local"],
+  "globalEnv": [
+    "GROQ_API_KEY",
+    "GROQ_MOCK",
+    "DEPLOYER_KEY",
+    "HOOK_AUTH_SECRET",
+    "BASE_SEPOLIA_RPC_URL"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
