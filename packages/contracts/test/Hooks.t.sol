@@ -110,6 +110,24 @@ contract CouncilFeeHookTest is Test, Deployers {
         assertFalse(perms.afterSwap);
         assertFalse(perms.beforeInitialize);
     }
+
+    function test_twoStepOwnershipTransfer() public {
+        address newOwner = address(0xbeef);
+        hook.transferOwnership(newOwner);
+        assertEq(hook.pendingOwner(), newOwner);
+
+        vm.prank(newOwner);
+        hook.acceptOwnership();
+        assertEq(hook.owner(), newOwner);
+        assertEq(hook.pendingOwner(), address(0));
+    }
+
+    function test_acceptOwnership_revertNotPendingOwner() public {
+        hook.transferOwnership(address(0xbeef));
+        vm.prank(address(0xdead));
+        vm.expectRevert("not pending owner");
+        hook.acceptOwnership();
+    }
 }
 
 // ────────────────────────────── SwapGuardHook Tests ──────────────────────────────
@@ -183,6 +201,24 @@ contract SwapGuardHookTest is Test, Deployers {
         Hooks.Permissions memory perms = hook.getHookPermissions();
         assertTrue(perms.beforeSwap);
         assertFalse(perms.afterSwap);
+    }
+
+    function test_twoStepOwnershipTransfer() public {
+        address newOwner = address(0xbeef);
+        hook.transferOwnership(newOwner);
+        assertEq(hook.pendingOwner(), newOwner);
+
+        vm.prank(newOwner);
+        hook.acceptOwnership();
+        assertEq(hook.owner(), newOwner);
+        assertEq(hook.pendingOwner(), address(0));
+    }
+
+    function test_acceptOwnership_revertNotPendingOwner() public {
+        hook.transferOwnership(address(0xbeef));
+        vm.prank(address(0xdead));
+        vm.expectRevert("not pending owner");
+        hook.acceptOwnership();
     }
 }
 
@@ -280,5 +316,23 @@ contract SentimentOracleHookTest is Test, Deployers {
         Hooks.Permissions memory perms = hook.getHookPermissions();
         assertFalse(perms.beforeSwap);
         assertTrue(perms.afterSwap);
+    }
+
+    function test_twoStepOwnershipTransfer() public {
+        address newOwner = address(0xbeef);
+        hook.transferOwnership(newOwner);
+        assertEq(hook.pendingOwner(), newOwner);
+
+        vm.prank(newOwner);
+        hook.acceptOwnership();
+        assertEq(hook.owner(), newOwner);
+        assertEq(hook.pendingOwner(), address(0));
+    }
+
+    function test_acceptOwnership_revertNotPendingOwner() public {
+        hook.transferOwnership(address(0xbeef));
+        vm.prank(address(0xdead));
+        vm.expectRevert("not pending owner");
+        hook.acceptOwnership();
     }
 }
