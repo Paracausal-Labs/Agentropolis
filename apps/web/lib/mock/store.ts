@@ -125,7 +125,6 @@ class MockStore {
         const { deployedAgents, ytestBalance } = this.state
         const agentConfig = MOCK_AGENTS.find(a => a.id === agentId)
 
-        if (!agentConfig) throw new Error('Agent not found')
         if (deployedAgents.length >= 6) throw new Error('Max agents reached')
         if (ytestBalance < 0.01) throw new Error('Insufficient funds')
 
@@ -136,8 +135,8 @@ class MockStore {
 
         const newAgent: DeployedAgent = {
             id: Math.random().toString(36).substr(2, 9),
-            agentId: agentConfig.id,
-            type: agentConfig.type as keyof typeof AGENT_TYPES,
+            agentId: agentConfig?.id || agentId,
+            type: (agentConfig?.type || 'alphaHunter') as keyof typeof AGENT_TYPES,
             deployedAt: Date.now(),
             position,
         }
