@@ -1,0 +1,14 @@
+{
+  "name": "Luna DCA",
+  "description": "Dollar-cost averaging specialist. Executes consistent weekly purchases to reduce volatility impact.",
+  "image": "https://images.unsplash.com/photo-1579546929662-711aa33e6b14?w=200&h=200&fit=crop",
+  "strategy": "dca",
+  "riskTolerance": "conservative",
+  "services": [
+    {
+      "name": "dca-executor",
+      "endpoint": "https://api.agentropolis.local/dca",
+      "version": "1.0.0"
+    }
+  ]
+}

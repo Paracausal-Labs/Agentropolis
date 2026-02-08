@@ -23,6 +23,7 @@ export interface SessionState {
   depositTxHash?: string
   error?: string
   isDeposited: boolean
+  lastAction?: { type: string; cost: string; timestamp: number }
 }
 
 interface SessionContextValue {
@@ -54,7 +55,11 @@ function mapChannelStatusToSession(channelStatus: ChannelStatus): SessionStatus 
   return mapping[channelStatus]
 }
 
-function createSessionState(channelState: ChannelState, actionBalance: bigint): SessionState {
+function createSessionState(
+  channelState: ChannelState,
+  actionBalance: bigint,
+  lastAction?: { type: string; cost: string; timestamp: number }
+): SessionState {
   return {
     status: mapChannelStatusToSession(channelState.status),
     balance: formatYtestUsd(actionBalance),
@@ -63,6 +68,7 @@ function createSessionState(channelState: ChannelState, actionBalance: bigint): 
     depositTxHash: channelState.txHash,
     error: channelState.error,
     isDeposited: channelState.depositAmount > BigInt(0),
+    lastAction,
   }
 }
 
@@ -77,6 +83,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     balance: BigInt(0),
   })
   const [actionBalance, setActionBalance] = useState<bigint>(BigInt(0))
+  const [lastAction, setLastAction] = useState<{ type: string; cost: string; timestamp: number } | undefined>()
 
   useEffect(() => {
     const mgr = createChannelManager(
@@ -88,7 +95,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setActionBalance(mgr.state.balance)
   }, [publicClient, walletClient])
 
-  const state = createSessionState(channelState, actionBalance)
+  const state = createSessionState(channelState, actionBalance, lastAction)
 
   const isLoading = ['approving', 'depositing', 'connecting', 'creating', 'closing'].includes(channelState.status)
 
@@ -195,6 +202,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (result.success) {
       setActionBalance(result.newBalance)
       setChannelState(manager.state)
+      setLastAction({ type: 'Agent Deploy', cost: formatYtestUsd(deployCost), timestamp: Date.now() })
     }
 
     return result
@@ -315,7 +323,19 @@ export function SessionStatus() {
       </span>
 
       {(state.status === 'active' || state.status === 'settled') && (
-        <span className="text-xs text-[#00FF88] font-mono">{state.balance}</span>
+        <span className={`text-xs font-mono transition-all duration-300 ${
+          state.lastAction && Date.now() - state.lastAction.timestamp < 3000
+            ? 'text-[#FCEE0A] scale-110'
+            : 'text-[#00FF88]'
+        }`}>
+          {state.balance}
+        </span>
+      )}
+
+      {state.lastAction && Date.now() - state.lastAction.timestamp < 3000 && (
+        <span className="text-[10px] text-[#FCEE0A] font-mono animate-pulse">
+          -{state.lastAction.cost}
+        </span>
       )}
 
       {state.error && (

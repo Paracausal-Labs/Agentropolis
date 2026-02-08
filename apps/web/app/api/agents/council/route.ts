@@ -110,16 +110,19 @@ async function handleDeliberation(request: NextRequest): Promise<NextResponse> {
 
     const walletAddress = body.walletAddress || '0x0000000000000000000000000000000000000000'
 
-    // ENS endpoint fallback: if no agentEndpoint but walletAddress provided, try ENS lookup
-    if (!councilRequest.agentEndpoint && body.walletAddress) {
+    if (body.walletAddress) {
       try {
         const ensClient = createPublicClient({ chain: sepolia, transport: http() })
         const ensName = await ensClient.getEnsName({ address: body.walletAddress as `0x${string}` })
         if (ensName) {
-          const endpoint = await ensClient.getEnsText({
-            name: normalize(ensName),
-            key: 'com.agentropolis.endpoint',
-          })
+          const [endpoint, ensRisk, ensTokens] = await Promise.all([
+            !councilRequest.agentEndpoint
+              ? ensClient.getEnsText({ name: normalize(ensName), key: 'com.agentropolis.endpoint' }).catch(() => null)
+              : Promise.resolve(null),
+            ensClient.getEnsText({ name: normalize(ensName), key: 'com.agentropolis.risk' }).catch(() => null),
+            ensClient.getEnsText({ name: normalize(ensName), key: 'com.agentropolis.tokens' }).catch(() => null),
+          ])
+
           if (endpoint) {
             const validation = validateExternalEndpoint(endpoint)
             if (validation.valid) {
@@ -127,6 +130,19 @@ async function handleDeliberation(request: NextRequest): Promise<NextResponse> {
               councilRequest.agentEndpoint = endpoint
             } else {
               console.warn(`[API] ENS endpoint blocked for ${ensName}: ${validation.error}`)
+            }
+          }
+
+          if (ensRisk && ['low', 'medium', 'high'].includes(ensRisk)) {
+            console.log(`[API] ENS risk preference for ${ensName}: ${ensRisk}`)
+            councilRequest.context.riskLevel = ensRisk as 'low' | 'medium' | 'high'
+          }
+
+          if (ensTokens) {
+            const tokens = ensTokens.split(',').map(t => t.trim()).filter(Boolean)
+            if (tokens.length > 0) {
+              console.log(`[API] ENS token preferences for ${ensName}: ${tokens.join(', ')}`)
+              councilRequest.context.preferredTokens = tokens
             }
           }
         }

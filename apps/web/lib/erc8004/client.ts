@@ -9,20 +9,29 @@ const REPUTATION_REGISTRY_ADDRESS = '0x8004B663056A597Dffe9eCcC1965A193B7388713'
 
 const IDENTITY_REGISTRY_ABI = [
   {
-    inputs: [{ name: 'id', type: 'uint256' }],
-    name: 'getMetadataURI',
+    inputs: [{ name: 'tokenId', type: 'uint256' }],
+    name: 'tokenURI',
     outputs: [{ name: '', type: 'string' }],
     stateMutability: 'view',
     type: 'function',
   },
   {
-    inputs: [],
-    name: 'totalAgents',
+    inputs: [{ name: 'owner', type: 'address' }],
+    name: 'balanceOf',
     outputs: [{ name: '', type: 'uint256' }],
     stateMutability: 'view',
     type: 'function',
   },
+  {
+    inputs: [{ name: 'tokenId', type: 'uint256' }],
+    name: 'ownerOf',
+    outputs: [{ name: '', type: 'address' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
 ] as const
+
+const OUR_AGENT_TOKEN_IDS = [298, 299, 300] as const
 
 const REPUTATION_REGISTRY_ABI = [
   {
@@ -111,38 +120,25 @@ export async function queryERC8004Registry(
 
     console.log('[ERC-8004] Querying Base Sepolia registry at', IDENTITY_REGISTRY_ADDRESS)
 
-    let totalAgents = 3n
-    try {
-      totalAgents = (await client.readContract({
-        address: IDENTITY_REGISTRY_ADDRESS,
-        abi: IDENTITY_REGISTRY_ABI,
-        functionName: 'totalAgents',
-      })) as bigint
-      console.log(`[ERC-8004] Found ${totalAgents} agents in registry`)
-    } catch {
-      console.warn('[ERC-8004] Could not query totalAgents, using default limit of 3')
-    }
-
     const agents: AgentProfile[] = []
-    const limit = Math.min(Number(totalAgents), 10)
 
-    for (let i = 0; i < limit; i++) {
+    for (const tokenId of OUR_AGENT_TOKEN_IDS) {
       try {
         const metadataUri = (await client.readContract({
           address: IDENTITY_REGISTRY_ADDRESS,
           abi: IDENTITY_REGISTRY_ABI,
-          functionName: 'getMetadataURI',
-          args: [BigInt(i)],
+          functionName: 'tokenURI',
+          args: [BigInt(tokenId)],
         })) as string
 
         if (!metadataUri) continue
 
         const metadata = await fetchMetadata(metadataUri)
-        const reputation = await queryReputation(rpcUrl, i)
+        const reputation = await queryReputation(rpcUrl, tokenId)
 
         const agent: AgentProfile = {
-          agentId: i,
-          name: (metadata.name as string) || `Agent ${i}`,
+          agentId: tokenId,
+          name: (metadata.name as string) || `Agent ${tokenId}`,
           description: (metadata.description as string) || 'No description',
           image: (metadata.image as string) || 'https://via.placeholder.com/200',
           strategy: (metadata.strategy as AgentProfile['strategy']) || 'momentum',
@@ -154,12 +150,14 @@ export async function queryERC8004Registry(
         }
 
         agents.push(agent)
+        console.log(`[ERC-8004] Loaded agent #${tokenId}: ${agent.name}`)
       } catch (error) {
-        console.warn(`[ERC-8004] Failed to query agent ${i}:`, error)
+        console.warn(`[ERC-8004] Failed to query agent ${tokenId}:`, error)
         continue
       }
     }
 
+    console.log(`[ERC-8004] Loaded ${agents.length} agents from on-chain registry`)
     return agents
   } catch (error) {
     console.error('[ERC-8004] Registry query failed:', error)
