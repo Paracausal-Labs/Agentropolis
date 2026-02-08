@@ -3,9 +3,11 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import Scene3D from './Scene3D'
-import { Building, Road, Ground, StreetLamp } from './3d/Buildings'
+import { Building, Road, Ground, StreetLamp, LimitOrderTower } from './3d/Buildings'
 import { Agent3D, DeploymentEffect, Coin3D, FloatingText } from './3d/Agents'
 import { MOCK_AGENTS, BUILDINGS_CONFIG, LAMP_POSITIONS, COIN_CONFIG, WALKING_PATH_NODES, ROADS_CONFIG, INITIAL_COINS } from '@/lib/game-constants'
+import { getLimitOrders } from '@/lib/uniswap/limit-orders'
+import type { LimitOrder } from '@/components/PlaceOrderModal'
 import { useGame } from '@/contexts/GameContext'
 
 import { useWriteContract, useWaitForTransactionReceipt, useAccount, usePublicClient, useWalletClient } from 'wagmi'
@@ -25,6 +27,13 @@ function GameLoop() {
     return null
 }
 
+const LIMIT_ORDER_TOWER_POSITIONS: [number, number, number][] = [
+    [-12, 0, -8],
+    [12, 0, -8],
+    [-12, 0, 8],
+    [12, 0, 8],
+]
+
 interface CityView3DProps {
     onEnterCouncil: () => void
 }
@@ -36,9 +45,19 @@ export default function CityView3D({ onEnterCouncil }: CityView3DProps) {
     const [visuals, setVisuals] = useState<{ id: number, position: [number, number, number], text: string, color: string }[]>([])
     const [hasMounted, setHasMounted] = useState(false)
     const [showMarketplace, setShowMarketplace] = useState(false)
+    const [limitOrders, setLimitOrders] = useState<LimitOrder[]>([])
 
     useEffect(() => {
         setHasMounted(true)
+    }, [])
+
+    useEffect(() => {
+        setLimitOrders(getLimitOrders())
+        const handler = ((e: CustomEvent) => {
+            setLimitOrders(e.detail as LimitOrder[])
+        }) as EventListener
+        window.addEventListener('limitOrdersUpdated', handler)
+        return () => window.removeEventListener('limitOrdersUpdated', handler)
     }, [])
 
     // Initialize coins
@@ -76,7 +95,7 @@ export default function CityView3D({ onEnterCouncil }: CityView3DProps) {
                 actions.collectCoin(COIN_CONFIG[coin.type].value)
                 // Add visual
                 const val = COIN_CONFIG[coin.type].value
-                const text = `+${val >= 1 ? val : val.toFixed(1)} ETH`
+                const text = `+${val >= 1 ? val : val.toFixed(1)} $YTEST`
                 setVisuals(prev => [...prev, {
                     id: Date.now(),
                     position: [...coin.position] as [number, number, number],
@@ -166,6 +185,22 @@ export default function CityView3D({ onEnterCouncil }: CityView3DProps) {
 
                 {/* Effects */}
                 {showDeployEffect && <DeploymentEffect position={showDeployEffect} />}
+
+                {/* Limit Order Towers */}
+                {limitOrders.slice(0, 4).map((order, idx) => (
+                    <LimitOrderTower
+                        key={order.id}
+                        position={LIMIT_ORDER_TOWER_POSITIONS[idx]}
+                        order={order}
+                        onClick={() => {
+                            if (order.status === 'completed') {
+                                window.dispatchEvent(new CustomEvent('claimLimitOrder', { detail: order.id }))
+                            } else {
+                                window.dispatchEvent(new CustomEvent('showLimitOrderDetails', { detail: order }))
+                            }
+                        }}
+                    />
+                ))}
             </Scene3D>
             </div>
 
@@ -177,6 +212,7 @@ export default function CityView3D({ onEnterCouncil }: CityView3DProps) {
                     onDeploy={handleDeployAgent}
                     deployedIds={state.deployedAgents.map(a => a.agentId)}
                     balance={state.ytestBalance}
+                    onReset={() => actions.resetGame()}
                 />
             </div>
 
@@ -200,7 +236,7 @@ export default function CityView3D({ onEnterCouncil }: CityView3DProps) {
                         <span className="text-[#00F0FF] font-bold">{hasMounted ? state.xpTotal : 0}</span>
                         <div className="h-3 w-px bg-gray-600"></div>
                         <span className="text-gray-500">BALANCE:</span>
-                        <span className="text-[#FCEE0A] font-bold">{hasMounted ? state.ytestBalance.toFixed(3) : '0.000'} YES</span>
+                        <span className="text-[#FCEE0A] font-bold">{hasMounted ? state.ytestBalance.toFixed(2) : '0.00'} $YTEST</span>
                     </div>
                 </div>
             </div>
@@ -376,13 +412,15 @@ function AgentPanel({
     deployedCount,
     onDeploy,
     deployedIds,
-    balance
+    balance,
+    onReset
 }: {
     agents: typeof MOCK_AGENTS
     deployedCount: number
     onDeploy: (id: string) => void
     deployedIds: string[]
     balance: number
+    onReset: () => void
 }) {
     const [isCreating, setIsCreating] = useState(false)
     const [formData, setFormData] = useState({
@@ -549,12 +587,27 @@ function AgentPanel({
             </div>
 
             <div className="p-3 border-b border-[#FCEE0A]/30">
-                <button
-                    onClick={() => setIsCreating(!isCreating)}
-                    className="w-full py-2 bg-[#FCEE0A]/20 border border-[#FCEE0A] text-[#FCEE0A] font-bold text-xs uppercase tracking-widest hover:bg-[#FCEE0A] hover:text-black transition-all"
-                >
-                    {isCreating ? 'CANCEL CREATION' : '+ CREATE AGENT'}
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setIsCreating(!isCreating)}
+                        className="flex-1 py-2 bg-[#FCEE0A]/20 border border-[#FCEE0A] text-[#FCEE0A] font-bold text-xs uppercase tracking-widest hover:bg-[#FCEE0A] hover:text-black transition-all"
+                    >
+                        {isCreating ? 'CANCEL' : '+ CREATE'}
+                    </button>
+                    <button
+                        onClick={() => {
+                            localStorage.removeItem(CUSTOM_AGENTS_KEY)
+                            localStorage.removeItem('agentropolis_user_agent_ids')
+                            localStorage.removeItem('agentropolis_v3_gamestate')
+                            setCustomAgents([])
+                            onReset()
+                        }}
+                        className="px-3 py-2 border border-red-500/50 text-red-400 font-bold text-xs uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all"
+                        title="Reset all agents and game state"
+                    >
+                        RESET
+                    </button>
+                </div>
 
                 {isCreating && (
                     <div className="mt-3 space-y-3 bg-black/60 p-3 border border-[#FCEE0A]/30">

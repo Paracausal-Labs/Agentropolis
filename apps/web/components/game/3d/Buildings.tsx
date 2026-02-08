@@ -328,3 +328,113 @@ export function Ground() {
         </mesh>
     )
 }
+
+interface LimitOrderTowerProps {
+    position: [number, number, number]
+    order: {
+        id: string
+        direction: 'buy' | 'sell'
+        targetPrice: string
+        amount: string
+        status: 'construction' | 'active' | 'completed'
+    }
+    onClick?: () => void
+}
+
+export function LimitOrderTower({ position, order, onClick }: LimitOrderTowerProps) {
+    const meshRef = useRef<THREE.Mesh>(null)
+    const glowRef = useRef<THREE.PointLight>(null)
+
+    const config = useMemo(() => {
+        switch (order.status) {
+            case 'construction':
+                return { color: '#6b7280', emissive: '#6b7280', intensity: 0.1, edgeColor: '#9ca3af' }
+            case 'active':
+                return { color: '#3b82f6', emissive: '#3b82f6', intensity: 0.5, edgeColor: '#60a5fa' }
+            case 'completed':
+                return { color: '#fbbf24', emissive: '#fbbf24', intensity: 1.0, edgeColor: '#fcd34d' }
+        }
+    }, [order.status])
+
+    useFrame((state) => {
+        if (!meshRef.current) return
+        const mat = meshRef.current.material as THREE.MeshStandardMaterial
+        if (order.status === 'completed') {
+            const pulse = Math.sin(state.clock.elapsedTime * 3) * 0.3 + 0.7
+            mat.emissiveIntensity = pulse
+            if (glowRef.current) glowRef.current.intensity = pulse * 2
+        } else if (order.status === 'active') {
+            const pulse = Math.sin(state.clock.elapsedTime * 2) * 0.15 + 0.35
+            mat.emissiveIntensity = pulse
+        }
+    })
+
+    const h = 4
+    const w = 1.5
+
+    return (
+        <group position={position} onClick={(e) => { e.stopPropagation(); onClick?.() }}
+            onPointerOver={() => { if (onClick) document.body.style.cursor = 'pointer' }}
+            onPointerOut={() => { document.body.style.cursor = 'default' }}
+        >
+            <mesh ref={meshRef} position={[0, h / 2, 0]} castShadow>
+                <boxGeometry args={[w, h, w]} />
+                <meshStandardMaterial
+                    color={config.color}
+                    emissive={config.emissive}
+                    emissiveIntensity={config.intensity}
+                    metalness={0.7}
+                    roughness={0.2}
+                />
+            </mesh>
+
+            <lineSegments position={[0, h / 2, 0]}>
+                <edgesGeometry args={[new THREE.BoxGeometry(w, h, w)]} />
+                <lineBasicMaterial color={config.edgeColor} transparent opacity={0.6} />
+            </lineSegments>
+
+            <mesh position={[0, h + 0.5, 0]}>
+                <cylinderGeometry args={[0.05, 0.15, 1, 8]} />
+                <meshStandardMaterial color={config.edgeColor} emissive={config.edgeColor} emissiveIntensity={0.8} />
+            </mesh>
+
+            <pointLight
+                ref={glowRef}
+                position={[0, h + 1, 0]}
+                color={config.emissive}
+                distance={8}
+                decay={2}
+                intensity={config.intensity}
+            />
+
+            <Text
+                position={[0, h + 1.5, 0]}
+                fontSize={0.35}
+                color={config.edgeColor}
+                anchorX="center"
+                anchorY="middle"
+                outlineWidth={0.02}
+                outlineColor="#000000"
+            >
+                {`${order.direction === 'buy' ? 'BUY' : 'SELL'} @ $${order.targetPrice}`}
+            </Text>
+
+            <Text
+                position={[0, h + 1.1, 0]}
+                fontSize={0.25}
+                color={order.status === 'completed' ? '#fcd34d' : '#9ca3af'}
+                anchorX="center"
+                anchorY="middle"
+            >
+                {order.status === 'completed' ? 'FILLED' : order.status === 'active' ? 'ACTIVE' : 'PENDING'}
+            </Text>
+
+            {order.status === 'construction' && (
+                <lineSegments position={[0, h / 2, 0]}>
+                    <edgesGeometry args={[new THREE.BoxGeometry(w + 0.3, h + 0.3, w + 0.3)]} />
+                    <lineBasicMaterial color="#fbbf24" transparent opacity={0.3} />
+                </lineSegments>
+            )}
+        </group>
+    )
+}

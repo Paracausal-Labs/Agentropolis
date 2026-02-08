@@ -70,9 +70,9 @@ export function LimitOrderManager() {
       {/* Button to open modal - can be placed in header or elsewhere */}
       <button
         onClick={() => setIsPlaceModalOpen(true)}
-        className="fixed bottom-6 right-6 z-40 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold rounded-full shadow-lg transition-all flex items-center gap-2"
+        className="fixed bottom-14 right-6 z-40 px-5 py-2.5 bg-[#FCEE0A]/10 border border-[#FCEE0A]/40 hover:bg-[#FCEE0A]/20 hover:border-[#FCEE0A] text-[#FCEE0A] font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2 font-mono"
       >
-        🏗️ Place Limit Order
+        PLACE LIMIT ORDER
       </button>
 
       <PlaceOrderModal

@@ -6,6 +6,7 @@ import { ConnectButton } from '@/components/ConnectButton'
 import { SessionStatus } from '@/components/SessionProvider'
 import { SwapHandler } from '@/components/SwapHandler'
 import { GuestMode, GuestModeTimer } from '@/components/GuestMode'
+import { LimitOrderManager } from './LimitOrderManager'
 import { useGame } from '@/contexts/GameContext'
 
 const CityView3D = dynamic(() => import('./game/CityView3D'), { ssr: false })
@@ -64,7 +65,7 @@ export function AppPageContent() {
               <div className="h-6 w-px bg-[#FCEE0A]/30" />
               <div className="text-xs flex items-center gap-1">
                 <span className="text-gray-500">LVL</span>
-                <span className="text-[#FCEE0A] font-bold">{state.level}</span>
+                <span className="text-[#FCEE0A] font-bold" suppressHydrationWarning>{state.level}</span>
               </div>
             </>
           )}
@@ -100,6 +101,7 @@ export function AppPageContent() {
 
       <SwapHandler />
       <GuestMode />
+      <LimitOrderManager />
       <TransitionOverlay state={transitionState} />
     </div>
   )
