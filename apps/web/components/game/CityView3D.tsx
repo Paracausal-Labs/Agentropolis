@@ -97,7 +97,7 @@ export default function CityView3D({ onEnterCouncil }: CityView3DProps) {
     return (
         <div className="w-full h-full relative">
             {/* 3D Scene */}
-            <div style={showMarketplace ? { visibility: 'hidden' } : undefined}>
+            <div className="w-full h-full" style={showMarketplace ? { visibility: 'hidden' } : undefined}>
             <Scene3D
                 cameraPosition={[22, 22, 22]}
                 cameraMode="isometric"
