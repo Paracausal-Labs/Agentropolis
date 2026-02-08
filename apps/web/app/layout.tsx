@@ -8,9 +8,42 @@ const rajdhani = Rajdhani({
   variable: '--font-rajdhani',
 })
 
-export const metadata = {
-  title: 'AGENTROPOLIS | 2026',
-  description: 'Cyberpunk DeFi City Builder',
+import { Metadata, Viewport } from 'next'
+
+export const viewport: Viewport = {
+  themeColor: '#0a0a1a',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+}
+
+export const metadata: Metadata = {
+  title: {
+    default: 'AGENTROPOLIS | Cyberpunk City Builder',
+    template: '%s | AGENTROPOLIS'
+  },
+  description: 'Deploy AI agents, join the Council, and execute on-chain strategies in a neon-lit cyberpunk city.',
+  keywords: ['DeFi', 'GameFi', 'AI Agents', 'Cyberpunk', 'Base', 'Uniswap', 'Yellow Network'],
+  authors: [{ name: 'Agentropolis Team' }],
+  openGraph: {
+    type: 'website',
+    locale: 'en_US',
+    url: 'https://agentropolis.xyz',
+    title: 'AGENTROPOLIS',
+    description: 'Cyberpunk DeFi City Builder powered by AI Agents',
+    siteName: 'Agentropolis',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'AGENTROPOLIS',
+    description: 'Cyberpunk DeFi City Builder powered by AI Agents',
+    creator: '@agentropolis',
+  },
+  icons: {
+    icon: '/icon.png', // Next.js auto-generated
+    shortcut: '/icon.png',
+    apple: '/icon.png',
+  },
 }
 
 export default function RootLayout({

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { ConnectButton } from '@/components/ConnectButton'
 import { SessionStatus } from '@/components/SessionProvider'
@@ -16,16 +16,37 @@ type GameScene = 'city' | 'council'
 export function AppPageContent() {
   const [currentScene, setCurrentScene] = useState<GameScene>('city')
   const { state } = useGame()
+  const [mounted, setMounted] = useState(false)
+  const [transitionState, setTransitionState] = useState<'idle' | 'active' | 'finishing'>('idle')
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  const handleSceneSwitch = (target: GameScene) => {
+    if (transitionState !== 'idle') return
+    setTransitionState('active') // Start fade in
+
+    // Wait for fade to black (500ms)
+    setTimeout(() => {
+      setCurrentScene(target)
+      // Short delay to ensure render
+      setTimeout(() => {
+        setTransitionState('finishing') // Start fade out
+        setTimeout(() => setTransitionState('idle'), 500) // Cleanup
+      }, 100)
+    }, 500)
+  }
 
   const renderScene = () => {
     switch (currentScene) {
       case 'council':
-        return <CouncilRoom3D onBack={() => setCurrentScene('city')} />
+        return <CouncilRoom3D onBack={() => handleSceneSwitch('city')} />
       case 'city':
       default:
         return (
           <CityView3D
-            onEnterCouncil={() => setCurrentScene('council')}
+            onEnterCouncil={() => handleSceneSwitch('council')}
           />
         )
     }
@@ -57,7 +78,7 @@ export function AppPageContent() {
         </div>
 
         <div className="pointer-events-auto">
-          <ConnectButton />
+          {mounted && <ConnectButton />}
         </div>
       </header>
 
@@ -79,6 +100,30 @@ export function AppPageContent() {
 
       <SwapHandler />
       <GuestMode />
+      <TransitionOverlay state={transitionState} />
+    </div>
+  )
+}
+
+function TransitionOverlay({ state }: { state: 'idle' | 'active' | 'finishing' }) {
+  if (state === 'idle') return null
+
+  return (
+    <div
+      className={`
+                fixed inset-0 z-[99999999] bg-black pointer-events-none flex items-center justify-center
+                transition-opacity duration-500
+                ${state === 'active' ? 'opacity-100' : 'opacity-0'}
+            `}
+    >
+      <div className="text-center">
+        <div className="text-[#00F0FF] text-2xl font-black tracking-[0.5em] animate-pulse">
+          NEURAL_LINK_ESTABLISHED
+        </div>
+        <div className="w-64 h-1 bg-[#FCEE0A]/30 mx-auto mt-4 overflow-hidden">
+          <div className="h-full bg-[#FCEE0A] w-full animate-[shimmer_1s_infinite]" />
+        </div>
+      </div>
     </div>
   )
 }

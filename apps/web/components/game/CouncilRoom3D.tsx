@@ -1,9 +1,12 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
+import { useFrame } from '@react-three/fiber'
+import * as THREE from 'three'
+import { Text, Html } from '@react-three/drei'
 import Scene3D from './Scene3D'
 import { Agent3D } from './3d/Agents'
-import { COLORS, AGENT_TYPES, PRESET_PROMPTS } from '@/lib/game-constants'
+import { COLORS, AGENT_TYPES, PRESET_PROMPTS, CONFERENCE_ROOM_CONFIG } from '@/lib/game-constants'
 import { useGame } from '@/contexts/GameContext'
 import { useStrategyExecutor } from '@/lib/uniswap/strategy-router'
 
@@ -224,22 +227,47 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
         <div className="w-full h-full relative font-[Rajdhani]">
             {/* 3D Scene */}
             <Scene3D
-                cameraPosition={[0, 5.5, 8.5]}
+                cameraPosition={[0, 6, 8]}
                 cameraMode="orbital"
                 enablePostProcessing
+                minDistance={5}
+                maxDistance={9}
+                minPolarAngle={0}
+                maxPolarAngle={Math.PI / 2.1}
             >
                 {/* Environment */}
-                <RoundTable />
-                {/* Floor */}
-                <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, 0]} receiveShadow>
-                    <circleGeometry args={[12, 64]} />
-                    <meshStandardMaterial color={COLORS.bg.secondary} roughness={0.5} metalness={0.5} />
-                    <gridHelper args={[20, 20, '#444', '#111']} rotation={[Math.PI / 2, 0, 0]} position={[0, 0.01, 0]} />
-                </mesh>
+                <IndustrialRoom />
 
-                {/* Agents */}
+                {/* Centerpiece */}
+                <ConferenceTable />
+
+                {/* Seating */}
+                {CONFERENCE_ROOM_CONFIG.chairPositions.map((pos, i) => {
+                    const angle = Math.atan2(pos[0], pos[2]) + Math.PI
+                    return (
+                        <FuturisticChair
+                            key={i}
+                            position={pos}
+                            rotation={angle}
+                        />
+                    )
+                })}
+
+                {/* Ambient Elements */}
+                <CeilingCables />
+                <WallTerminal position={[-9, 2, 0]} rotation={[0, Math.PI / 2, 0]} />
+                <WallTerminal position={[9, 2, 0]} rotation={[0, -Math.PI / 2, 0]} />
+
+                {/* Hologram Pedestals */}
+                <HologramPedestal position={[-8, 0, -8]} color={COLORS.neon.cyan} />
+                <HologramPedestal position={[8, 0, -8]} color={COLORS.neon.magenta} />
+                <HologramPedestal position={[-8, 0, 8]} color={COLORS.neon.purple} />
+                <HologramPedestal position={[8, 0, 8]} color={COLORS.neon.yellow} />
+
+                {/* Agents - Manually positioned to match chairs */}
+                {/* Chair 0: [-2.5, 0, -3] -> Alpha Hunter */}
                 <Agent3D
-                    position={[0, 0.5, -4]}
+                    position={[-2.5, 0.45, -3]}
                     agentType="alphaHunter"
                     rotation={0}
                     isSelected={selectedAgent === 'alphaHunter'}
@@ -247,29 +275,38 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
                     onClick={() => handleAgentClick('alphaHunter')}
                     onPointerOver={() => setHoveredAgent('alphaHunter')}
                     onPointerOut={() => setHoveredAgent(null)}
+                    showNameTag={hoveredAgent === 'alphaHunter' || selectedAgent === 'alphaHunter'}
                 />
+
+                {/* Chair 1: [2.5, 0, -3] -> Risk Sentinel */}
                 <Agent3D
-                    position={[3.5, 0.5, -2]}
+                    position={[2.5, 0.45, -3]}
                     agentType="riskSentinel"
-                    rotation={-Math.PI / 3}
+                    rotation={0}
                     isSelected={selectedAgent === 'riskSentinel'}
                     isHovered={hoveredAgent === 'riskSentinel'}
                     onClick={() => handleAgentClick('riskSentinel')}
                     onPointerOver={() => setHoveredAgent('riskSentinel')}
                     onPointerOut={() => setHoveredAgent(null)}
+                    showNameTag={hoveredAgent === 'riskSentinel' || selectedAgent === 'riskSentinel'}
                 />
+
+                {/* Chair 2: [-2.5, 0, 3] -> Macro Oracle */}
                 <Agent3D
-                    position={[3.5, 0.5, 2]}
+                    position={[-2.5, 0.45, 3]}
                     agentType="macroOracle"
-                    rotation={-2 * Math.PI / 3}
+                    rotation={Math.PI}
                     isSelected={selectedAgent === 'macroOracle'}
                     isHovered={hoveredAgent === 'macroOracle'}
                     onClick={() => handleAgentClick('macroOracle')}
                     onPointerOver={() => setHoveredAgent('macroOracle')}
                     onPointerOut={() => setHoveredAgent(null)}
+                    showNameTag={hoveredAgent === 'macroOracle' || selectedAgent === 'macroOracle'}
                 />
+
+                {/* Chair 3: [2.5, 0, 3] -> Devils Advocate */}
                 <Agent3D
-                    position={[0, 0.5, 4]}
+                    position={[2.5, 0.45, 3]}
                     agentType="devilsAdvocate"
                     rotation={Math.PI}
                     isSelected={selectedAgent === 'devilsAdvocate'}
@@ -277,21 +314,27 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
                     onClick={() => handleAgentClick('devilsAdvocate')}
                     onPointerOver={() => setHoveredAgent('devilsAdvocate')}
                     onPointerOut={() => setHoveredAgent(null)}
+                    showNameTag={hoveredAgent === 'devilsAdvocate' || selectedAgent === 'devilsAdvocate'}
                 />
+
+                {/* Chair 4: [-5, 0, 0] -> Council Clerk */}
                 <Agent3D
-                    position={[-3.5, 0.5, 2]}
+                    position={[-5, 0.45, 0]}
                     agentType="councilClerk"
-                    rotation={2 * Math.PI / 3}
+                    rotation={Math.PI / 2}
                     isSelected={selectedAgent === 'councilClerk'}
                     isHovered={hoveredAgent === 'councilClerk'}
                     onClick={() => handleAgentClick('councilClerk')}
                     onPointerOver={() => setHoveredAgent('councilClerk')}
                     onPointerOut={() => setHoveredAgent(null)}
+                    showNameTag={hoveredAgent === 'councilClerk' || selectedAgent === 'councilClerk'}
                 />
+
+                {/* Chair 5: [5, 0, 0] -> User */}
                 <Agent3D
-                    position={[-3.5, 0.5, -2]}
+                    position={[5, 0.45, 0]}
                     agentType="user"
-                    rotation={Math.PI / 3}
+                    rotation={-Math.PI / 2}
                     showNameTag
                 />
 
@@ -307,25 +350,27 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
             {/* UI Overlay */}
             <div className="absolute inset-0 pointer-events-none">
                 {/* Header */}
-                <div className="absolute top-4 left-4 pointer-events-auto">
+                <div className="absolute top-24 left-4 pointer-events-auto">
                     <button onClick={onBack} className="btn-cyber-outline px-6 py-2 bg-black/80">
                         {'<'} EXIT_CHAMBER
                     </button>
-                    <div className="mt-4 cyber-panel p-4 bg-black/60 backdrop-blur w-64">
-                        <h1 className="text-xl font-bold text-[#FCEE0A] uppercase tracking-widest">Council Chamber</h1>
-                        <p className="text-xs text-gray-400 mt-1">Select an agent to interact or start a general deliberation.</p>
+                    <div className="mt-4 cyber-panel p-4 bg-black/60 backdrop-blur w-72">
+                        <h1 className="text-xl font-bold text-[#FCEE0A] uppercase tracking-widest">Strategy Room</h1>
+                        <p className="text-xs text-gray-400 mt-1">
+                            <span className="text-[#00F0FF]">NEO-TOKYO PROJECT</span> deliberation in progress.
+                        </p>
                     </div>
                 </div>
 
                 {/* Hook Parameters Panel */}
                 {hookParameters && (
-                    <div className="absolute top-48 left-4 w-64 pointer-events-auto animate-in slide-in-from-left duration-500 z-40">
+                    <div className="absolute top-72 left-4 w-64 pointer-events-auto animate-in slide-in-from-left duration-500 z-40">
                         <div className="cyber-panel p-4 bg-black/90 border border-[#00F0FF]/50 clip-corner-br">
                             <div className="flex items-center gap-2 mb-3 border-b border-[#00F0FF]/30 pb-2">
                                 <div className="w-2 h-2 bg-[#00F0FF] rounded-full animate-pulse" />
                                 <span className="text-[#00F0FF] text-xs font-bold tracking-widest">HOOK PARAMS UPDATED</span>
                             </div>
-                            
+
                             <div className="space-y-3 text-sm">
                                 <div>
                                     <div className="text-[#00F0FF] text-[10px] uppercase tracking-wider mb-1">Dynamic Fee</div>
@@ -511,27 +556,320 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
     )
 }
 
-function RoundTable() {
+function ConferenceTable() {
+    const { width, depth, height } = CONFERENCE_ROOM_CONFIG.table
+
     return (
-        <group position={[0, -0.1, 0]}>
-            <mesh position={[0, 0.5, 0]} castShadow receiveShadow>
-                <cylinderGeometry args={[4, 4, 0.2, 32]} />
-                <meshStandardMaterial color="#111" metalness={0.8} roughness={0.2} />
+        <group position={[0, height / 2, 0]}>
+            {/* Table Top */}
+            <mesh receiveShadow castShadow>
+                <boxGeometry args={[width, 0.2, depth]} />
+                <meshStandardMaterial
+                    color="#1a1a1a"
+                    metalness={0.9}
+                    roughness={0.2}
+                />
             </mesh>
-            {/* Glowing Ring */}
-            <mesh position={[0, 0.61, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-                <ringGeometry args={[3.8, 3.9, 64]} />
-                <meshBasicMaterial color={COLORS.neon.cyan} />
+
+            {/* Glowing Edge */}
+            <mesh position={[0, 0, 0]}>
+                <boxGeometry args={[width + 0.1, 0.18, depth + 0.1]} />
+                <meshStandardMaterial
+                    color="#000"
+                    emissive={COLORS.neon.cyan}
+                    emissiveIntensity={2}
+                    transparent
+                    opacity={0.5}
+                />
             </mesh>
-            {/* Center Hologram base */}
-            <mesh position={[0, 0.6, 0]}>
-                <cylinderGeometry args={[1, 1.2, 0.1, 16]} />
-                <meshStandardMaterial color="#222" />
+
+            {/* Table Base */}
+            <mesh position={[0, -height / 2, 0]} castShadow>
+                <cylinderGeometry args={[1.5, 2, height, 8]} />
+                <meshStandardMaterial color="#111" metalness={0.8} roughness={0.5} />
+            </mesh>
+
+            {/* Tech Panels on surface */}
+            <mesh position={[-2, 0.11, 1]} rotation={[-Math.PI / 2, 0, 0]}>
+                <planeGeometry args={[1, 0.6]} />
+                <meshBasicMaterial color="#000" />
+            </mesh>
+            <mesh position={[2, 0.11, -1]} rotation={[-Math.PI / 2, 0, 0]}>
+                <planeGeometry args={[1, 0.6]} />
+                <meshBasicMaterial color="#000" />
+            </mesh>
+
+            {/* Hologram Projector Center */}
+            <mesh position={[0, 0.11, 0]}>
+                <boxGeometry args={[4, 0.05, 2.5]} />
+                <meshStandardMaterial color="#000" metalness={1} roughness={0.1} />
+            </mesh>
+
+            {/* Hologram Content */}
+            <group position={[0, 0.5, 0]}>
+                <CityHologram />
+            </group>
+
+            {/* Table Legs details */}
+            <mesh position={[3, -height / 2, 1.5]}>
+                <cylinderGeometry args={[0.2, 0.2, height, 8]} />
+                <meshStandardMaterial color="#333" metalness={1} />
+            </mesh>
+            <mesh position={[-3, -height / 2, 1.5]}>
+                <cylinderGeometry args={[0.2, 0.2, height, 8]} />
+                <meshStandardMaterial color="#333" metalness={1} />
+            </mesh>
+            <mesh position={[3, -height / 2, -1.5]}>
+                <cylinderGeometry args={[0.2, 0.2, height, 8]} />
+                <meshStandardMaterial color="#333" metalness={1} />
+            </mesh>
+            <mesh position={[-3, -height / 2, -1.5]}>
+                <cylinderGeometry args={[0.2, 0.2, height, 8]} />
+                <meshStandardMaterial color="#333" metalness={1} />
             </mesh>
         </group>
     )
 }
 
+
+
+function FuturisticChair({ position, rotation }: { position: [number, number, number], rotation: number }) {
+    return (
+        <group position={position} rotation={[0, rotation, 0]}>
+            {/* Seat Base */}
+            <mesh position={[0, 0.3, 0]} castShadow>
+                <boxGeometry args={[0.8, 0.1, 0.8]} />
+                <meshStandardMaterial color="#222" roughness={0.8} />
+            </mesh>
+
+            {/* Backrest */}
+            <mesh position={[0, 0.8, -0.35]} castShadow>
+                <boxGeometry args={[0.8, 1.2, 0.1]} />
+                <meshStandardMaterial color="#1a1a1a" roughness={0.9} />
+            </mesh>
+
+            {/* Armrests */}
+            <mesh position={[-0.45, 0.6, 0]}>
+                <boxGeometry args={[0.1, 0.05, 0.6]} />
+                <meshStandardMaterial color="#333" metalness={0.8} />
+            </mesh>
+            <mesh position={[0.45, 0.6, 0]}>
+                <boxGeometry args={[0.1, 0.05, 0.6]} />
+                <meshStandardMaterial color="#333" metalness={0.8} />
+            </mesh>
+
+            {/* Neon Strips on Back */}
+            <mesh position={[0, 0.8, -0.4]}>
+                <boxGeometry args={[0.05, 1, 0.05]} />
+                <meshBasicMaterial color={COLORS.neon.magenta} />
+            </mesh>
+            <mesh position={[-0.3, 0.8, -0.4]}>
+                <boxGeometry args={[0.02, 0.8, 0.02]} />
+                <meshBasicMaterial color={COLORS.neon.cyan} />
+            </mesh>
+            <mesh position={[0.3, 0.8, -0.4]}>
+                <boxGeometry args={[0.02, 0.8, 0.02]} />
+                <meshBasicMaterial color={COLORS.neon.cyan} />
+            </mesh>
+
+            {/* Stand */}
+            <mesh position={[0, 0.15, 0]}>
+                <cylinderGeometry args={[0.1, 0.3, 0.3, 8]} />
+                <meshStandardMaterial color="#444" metalness={1} />
+            </mesh>
+        </group>
+    )
+}
+
+function IndustrialRoom() {
+    const size = CONFERENCE_ROOM_CONFIG.floorSize
+
+    return (
+        <group>
+            {/* Floor */}
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
+                <planeGeometry args={[size, size]} />
+                <meshStandardMaterial color="#050510" roughness={0.6} metalness={0.4} />
+            </mesh>
+
+            {/* Floor Grid Patterns */}
+            <gridHelper args={[size, 20, '#222', '#111']} />
+
+            {/* Glowing Floor Strips */}
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 6]}>
+                <planeGeometry args={[size, 0.2]} />
+                <meshBasicMaterial color={COLORS.neon.purple} toneMapped={false} />
+            </mesh>
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -6]}>
+                <planeGeometry args={[size, 0.2]} />
+                <meshBasicMaterial color={COLORS.neon.purple} toneMapped={false} />
+            </mesh>
+
+            {/* Walls */}
+            <mesh position={[0, 5, -10]} receiveShadow>
+                <planeGeometry args={[size, 10]} />
+                <meshStandardMaterial color="#111" metalness={0.5} roughness={0.8} />
+            </mesh>
+            <mesh position={[0, 5, 10]} rotation={[0, Math.PI, 0]} receiveShadow>
+                <planeGeometry args={[size, 10]} />
+                <meshStandardMaterial color="#111" metalness={0.5} roughness={0.8} />
+            </mesh>
+            <mesh position={[-10, 5, 0]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
+                <planeGeometry args={[size, 10]} />
+                <meshStandardMaterial color="#151520" metalness={0.6} roughness={0.7} />
+            </mesh>
+            <mesh position={[10, 5, 0]} rotation={[0, -Math.PI / 2, 0]} receiveShadow>
+                <planeGeometry args={[size, 10]} />
+                <meshStandardMaterial color="#151520" metalness={0.6} roughness={0.7} />
+            </mesh>
+            {/* Front Wall (behind camera usually, but closing the room now) */}
+            <mesh position={[0, 5, 10]} rotation={[0, Math.PI, 0]} receiveShadow>
+                <planeGeometry args={[size, 10]} />
+                <meshStandardMaterial color="#111" metalness={0.5} roughness={0.8} />
+            </mesh>
+
+            {/* Wall Details - Pipes/Vents */}
+            <mesh position={[-9.5, 8, 0]} rotation={[0, 0, Math.PI / 2]}>
+                <cylinderGeometry args={[0.5, 0.5, 18, 16]} />
+                <meshStandardMaterial color="#222" metalness={0.8} />
+            </mesh>
+            <mesh position={[9.5, 8, 0]} rotation={[0, 0, Math.PI / 2]}>
+                <cylinderGeometry args={[0.5, 0.5, 18, 16]} />
+                <meshStandardMaterial color="#222" metalness={0.8} />
+            </mesh>
+        </group>
+    )
+}
+
+function WallTerminal({ position, rotation }: { position: [number, number, number], rotation: [number, number, number] }) {
+    // Fix hydration mismatch by generating random values once
+    const lines = useMemo(() => Array.from({ length: 5 }).map(() => ({
+        width: 0.8,
+        yOffset: Math.random() * 0.3,
+        xOffset: Math.random()
+    })), [])
+
+    return (
+        <group position={position} rotation={rotation}>
+            {/* Screen Frame */}
+            <mesh position={[0, 0, 0.1]}>
+                <boxGeometry args={[3, 2, 0.2]} />
+                <meshStandardMaterial color="#333" />
+            </mesh>
+            {/* Screen Glow */}
+            <mesh position={[0, 0, 0.21]}>
+                <planeGeometry args={[2.8, 1.8]} />
+                <meshBasicMaterial color={COLORS.neon.cyan} transparent opacity={0.1} />
+            </mesh>
+            {/* Data Text Lines (simulated) */}
+            {lines.map((line, i) => (
+                <mesh key={i} position={[-1 + line.xOffset, 0.5 - i * 0.3, 0.22]}>
+                    <planeGeometry args={[line.width, 0.05]} />
+                    <meshBasicMaterial color={COLORS.neon.green} />
+                </mesh>
+            ))}
+        </group>
+    )
+}
+
+function CityHologram() {
+    const groupRef = useRef<THREE.Group>(null)
+
+    // Fix hydration mismatch
+    const buildings = useMemo(() => Array.from({ length: 15 }).map(() => ({
+        h: Math.random() * 0.8 + 0.2,
+        x: (Math.random() - 0.5) * 2,
+        z: (Math.random() - 0.5) * 2
+    })), [])
+
+    useFrame((state) => {
+        if (groupRef.current) {
+            groupRef.current.rotation.y = state.clock.elapsedTime * 0.1
+        }
+    })
+
+    return (
+        <group ref={groupRef}>
+            {/* Hologram Base Glow */}
+            <pointLight distance={3} intensity={2} color={COLORS.neon.cyan} />
+
+            {/* City Grid */}
+            <gridHelper args={[3, 20, COLORS.neon.cyan, COLORS.neon.cyan]} />
+
+            {/* Abstract Buildings */}
+            {buildings.map((b, i) => (
+                <mesh key={i} position={[b.x, b.h / 2, b.z]}>
+                    <boxGeometry args={[0.1, b.h, 0.1]} />
+                    <meshBasicMaterial
+                        color={COLORS.neon.cyan}
+                        transparent
+                        opacity={0.6}
+                        wireframe
+                    />
+                </mesh>
+            ))}
+
+            {/* Floating Text */}
+            <group position={[0, 1, 0]} rotation={[0, 0, 0]}>
+                <Text
+                    scale={[0.2, 0.2, 0.2]}
+                    color={COLORS.neon.cyan}
+                    anchorX="center"
+                    anchorY="middle"
+                // Removed font prop to use default to avoid 404
+                >
+                    NEO-TOKYO PROJECT
+                </Text>
+            </group>
+        </group>
+    )
+}
+
+function HologramPedestal({ position, color }: { position: [number, number, number], color: string }) {
+    const gemRef = useRef<THREE.Mesh>(null)
+
+    useFrame((state) => {
+        if (gemRef.current) {
+            gemRef.current.rotation.y = state.clock.elapsedTime
+            gemRef.current.position.y = 1.2 + Math.sin(state.clock.elapsedTime * 2) * 0.1
+        }
+    })
+
+    return (
+        <group position={position}>
+            {/* Base */}
+            <mesh position={[0, 0.5, 0]}>
+                <boxGeometry args={[1, 1, 1]} />
+                <meshStandardMaterial color="#222" metalness={0.8} />
+            </mesh>
+            {/* Light Beam */}
+            <mesh position={[0, 1.5, 0]}>
+                <cylinderGeometry args={[0.1, 0.4, 2, 8, 1, true]} />
+                <meshBasicMaterial color={color} transparent opacity={0.2} side={THREE.DoubleSide} />
+            </mesh>
+            {/* Floating Info Gem */}
+            <mesh ref={gemRef} position={[0, 1.2, 0]}>
+                <octahedronGeometry args={[0.3]} />
+                <meshBasicMaterial color={color} wireframe />
+            </mesh>
+        </group>
+    )
+}
+
+function CeilingCables() {
+    return (
+        <group position={[0, 15, 0]}>
+            <mesh position={[0, 0, 0]} rotation={[0, 0, 0.2]}>
+                <torusGeometry args={[8, 0.1, 8, 50, Math.PI * 2]} />
+                <meshStandardMaterial color="#111" />
+            </mesh>
+            <mesh position={[2, -1, 0]} rotation={[0, 0, -0.1]}>
+                <torusGeometry args={[6, 0.08, 8, 40, Math.PI * 2]} />
+                <meshStandardMaterial color="#222" />
+            </mesh>
+        </group>
+    )
+}
 
 function ProposalCard({ proposal, opinions, onResolve }: { proposal: any, opinions: any[], onResolve: () => void }) {
     const { actions } = useGame()
@@ -620,7 +958,7 @@ function ProposalCard({ proposal, opinions, onResolve }: { proposal: any, opinio
 
                 {/* Deliberation Transcript Toggle */}
                 <div className="mb-8 border border-gray-800 bg-[#111]">
-                    <button 
+                    <button
                         onClick={() => setShowDeliberation(!showDeliberation)}
                         className="w-full flex justify-between items-center p-3 hover:bg-gray-800 transition-colors"
                     >
@@ -629,17 +967,16 @@ function ProposalCard({ proposal, opinions, onResolve }: { proposal: any, opinio
                         </span>
                         <span className="text-[#FCEE0A]">{showDeliberation ? '▲' : '▼'}</span>
                     </button>
-                    
+
                     {showDeliberation && (
                         <div className="p-4 border-t border-gray-800 space-y-3 max-h-60 overflow-y-auto custom-scrollbar">
                             {opinions.map((op, i) => (
                                 <div key={i} className="text-sm">
                                     <div className="flex items-center gap-2 mb-1">
                                         <span>{AGENT_TYPES[op.agent as keyof typeof AGENT_TYPES]?.emoji}</span>
-                                        <span className={`font-bold text-xs uppercase ${
-                                            op.stance === 'support' ? 'text-green-500' : 
+                                        <span className={`font-bold text-xs uppercase ${op.stance === 'support' ? 'text-green-500' :
                                             op.stance === 'neutral' ? 'text-blue-400' : 'text-red-500'
-                                        }`}>
+                                            }`}>
                                             {AGENT_TYPES[op.agent as keyof typeof AGENT_TYPES]?.name || op.agent}
                                         </span>
                                     </div>
@@ -709,13 +1046,13 @@ function DeliberationTranscript({ opinions }: { opinions: any[] }) {
             </div>
             <div ref={scrollRef} className="flex-1 p-4 overflow-y-auto space-y-4 custom-scrollbar">
                 {opinions.map((op, i) => {
-                     const stanceColor = op.stance === 'support' ? 'text-green-500'
+                    const stanceColor = op.stance === 'support' ? 'text-green-500'
                         : op.stance === 'neutral' ? 'text-blue-400'
-                        : 'text-red-500'
-                     const borderColor = op.stance === 'support' ? 'border-green-500/30'
+                            : 'text-red-500'
+                    const borderColor = op.stance === 'support' ? 'border-green-500/30'
                         : op.stance === 'neutral' ? 'border-blue-400/30'
-                        : 'border-red-500/30'
-                    
+                            : 'border-red-500/30'
+
                     return (
                         <div key={i} className={`bg-black/40 border ${borderColor} p-3 clip-corner-br animate-in slide-in-from-right duration-500`}>
                             <div className="flex justify-between items-center mb-2">

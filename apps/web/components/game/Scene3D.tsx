@@ -10,6 +10,10 @@ interface Scene3DProps {
     cameraPosition?: [number, number, number]
     cameraMode?: 'isometric' | 'orbital' | 'firstPerson'
     enablePostProcessing?: boolean
+    minDistance?: number
+    maxDistance?: number
+    minPolarAngle?: number
+    maxPolarAngle?: number
 }
 
 export default function Scene3D({
@@ -17,6 +21,10 @@ export default function Scene3D({
     cameraPosition = [10, 10, 10],
     cameraMode = 'isometric',
     enablePostProcessing = true,
+    minDistance,
+    maxDistance,
+    minPolarAngle,
+    maxPolarAngle,
 }: Scene3DProps) {
     return (
         <div className="w-full h-full">
@@ -40,10 +48,10 @@ export default function Scene3D({
                     enablePan={cameraMode === 'isometric'}
                     enableRotate={true}
                     enableZoom={true}
-                    minDistance={cameraMode === 'isometric' ? 8 : 5}
-                    maxDistance={cameraMode === 'isometric' ? 100 : 50}
-                    minPolarAngle={Math.PI / 6}
-                    maxPolarAngle={Math.PI / 2.2}
+                    minDistance={minDistance ?? (cameraMode === 'isometric' ? 8 : 5)}
+                    maxDistance={maxDistance ?? (cameraMode === 'isometric' ? 100 : 50)}
+                    minPolarAngle={minPolarAngle ?? Math.PI / 6}
+                    maxPolarAngle={maxPolarAngle ?? Math.PI / 2.2}
                     dampingFactor={0.05}
                     enableDamping={true}
                 />
@@ -66,8 +74,8 @@ export default function Scene3D({
                     shadow-mapSize-height={2048}
                 />
 
-                {/* Atmosphere - Cyberpunk fog */}
-                <fog attach="fog" args={['#0a0a1a', 10, 50]} />
+                {/* Atmosphere - Cyberpunk fog - pushed back to allow zoom */}
+                <fog attach="fog" args={['#0a0a1a', 20, 120]} />
 
                 {/* Scene Content */}
                 {children}

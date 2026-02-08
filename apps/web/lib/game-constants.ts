@@ -1,4 +1,22 @@
 // Cyberpunk color palette based on game design
+export const CONFERENCE_ROOM_CONFIG = {
+    table: {
+        width: 8,
+        depth: 4,
+        height: 1.2,
+    },
+    chairPositions: [
+        // 2 on each long side, 1 on each short side (total 6)
+        [-2.5, 0, -3],
+        [2.5, 0, -3],
+        [-2.5, 0, 3],
+        [2.5, 0, 3],
+        [-5, 0, 0],
+        [5, 0, 0],
+    ] as [number, number, number][],
+    floorSize: 20,
+}
+
 export const COLORS = {
     // Backgrounds
     bg: {
