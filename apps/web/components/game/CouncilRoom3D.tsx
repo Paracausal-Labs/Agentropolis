@@ -632,32 +632,37 @@ function ProposalCard({ proposal, onResolve }: { proposal: any, onResolve: () =>
                     {'"'}{proposal.reasoning}{'"'}
                 </div>
 
-                <div className="flex gap-4">
-                    <button onClick={handleExecute} disabled={executing} className="flex-1 btn-cyber h-14 text-lg disabled:opacity-50">
-                        {executing ? 'EXECUTING...' : 'AUTHORIZE EXECUTION'}
-                    </button>
-                    <button onClick={onResolve} disabled={executing} className="flex-1 btn-cyber-outline h-14 text-lg border-red-500 text-red-500 hover:bg-red-500 hover:text-white disabled:opacity-50">
-                        REJECT
-                    </button>
-                </div>
-
-                {swapResult && (
-                    <div className={`mt-4 p-3 border ${swapResult.status === 'success' ? 'border-green-500 text-green-400' : 'border-red-500 text-red-400'}`}>
-                        {swapResult.status === 'success' ? (
-                            <div>
-                                <div className="font-bold">Swap Executed!</div>
-                                {swapResult.txHash && (
-                                    <a href={`https://sepolia.basescan.org/tx/${swapResult.txHash}`} target="_blank" rel="noopener noreferrer" className="underline text-sm">
-                                        View on BaseScan
-                                    </a>
-                                )}
-                            </div>
-                        ) : (
-                            <div>
-                                <div className="font-bold">Swap Failed</div>
-                                <div className="text-sm">{swapResult.error}</div>
-                            </div>
-                        )}
+                {swapResult ? (
+                    <div>
+                        <div className={`p-3 border mb-4 ${swapResult.status === 'success' ? 'border-green-500 text-green-400' : 'border-red-500 text-red-400'}`}>
+                            {swapResult.status === 'success' ? (
+                                <div>
+                                    <div className="font-bold">Swap Executed!</div>
+                                    {swapResult.txHash && (
+                                        <a href={`https://sepolia.basescan.org/tx/${swapResult.txHash}`} target="_blank" rel="noopener noreferrer" className="underline text-sm">
+                                            View on BaseScan
+                                        </a>
+                                    )}
+                                </div>
+                            ) : (
+                                <div>
+                                    <div className="font-bold">Swap Failed</div>
+                                    <div className="text-sm">{swapResult.error}</div>
+                                </div>
+                            )}
+                        </div>
+                        <button onClick={onResolve} className="w-full btn-cyber h-14 text-lg">
+                            DONE
+                        </button>
+                    </div>
+                ) : (
+                    <div className="flex gap-4">
+                        <button onClick={handleExecute} disabled={executing} className="flex-1 btn-cyber h-14 text-lg disabled:opacity-50">
+                            {executing ? 'EXECUTING...' : 'AUTHORIZE EXECUTION'}
+                        </button>
+                        <button onClick={onResolve} disabled={executing} className="flex-1 btn-cyber-outline h-14 text-lg border-red-500 text-red-500 hover:bg-red-500 hover:text-white disabled:opacity-50">
+                            REJECT
+                        </button>
                     </div>
                 )}
             </div>

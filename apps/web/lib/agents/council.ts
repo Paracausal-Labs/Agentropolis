@@ -792,7 +792,7 @@ function getMockTokenLaunchDeliberation(userPrompt: string): {
   return { messages, synthesis }
 }
 
-function getMockDeliberation(userPrompt: string): {
+function getMockDeliberation(_userPrompt: string): {
   messages: CouncilMessage[]
   synthesis: ClerkSynthesis
 } {
@@ -841,7 +841,7 @@ function getMockDeliberation(userPrompt: string): {
   ]
 
   const synthesis: ClerkSynthesis = {
-    finalStrategy: userPrompt.toLowerCase().includes('income') ? 'lp_full_range' : 'swap',
+    finalStrategy: 'swap',
     tokenIn: 'WETH',
     tokenOut: 'USDC',
     amountIn: '0.05',

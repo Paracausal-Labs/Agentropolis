@@ -166,24 +166,24 @@ export const MOCK_AGENTS = [
 // Preset prompts
 export const PRESET_PROMPTS = [
     {
-        label: '💰 Passive Income',
-        prompt: 'I want passive income from my 0.1 ETH',
-        emoji: '💰',
-    },
-    {
-        label: '🔄 Simple Swap',
-        prompt: 'Swap 0.05 ETH to USDC',
+        label: '🔄 Swap ETH→USDC',
+        prompt: 'Swap 0.005 WETH to USDC',
         emoji: '🔄',
     },
     {
-        label: '📈 High Yield LP',
-        prompt: 'Provide liquidity for maximum yield',
-        emoji: '📈',
+        label: '💰 Swap USDC→ETH',
+        prompt: 'Swap 10 USDC to WETH',
+        emoji: '💰',
     },
     {
-        label: '🚀 Launch Token',
-        prompt: 'Launch a memecoin for the lobster community',
-        emoji: '🚀',
+        label: '📊 DCA Strategy',
+        prompt: 'DCA 0.01 ETH into USDC weekly',
+        emoji: '📊',
+    },
+    {
+        label: '🛡️ Risk Assessment',
+        prompt: 'Is it safe to swap 0.1 ETH to USDC right now?',
+        emoji: '🛡️',
     },
 ]
 

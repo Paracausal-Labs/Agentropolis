@@ -62,10 +62,10 @@ function isTokenLaunchProposal(proposal: Proposal): proposal is TokenLaunchPropo
 }
 
 const PRESET_PROMPTS = [
-  { label: '💰 Passive Income', prompt: 'I want passive income from my 0.1 ETH' },
-  { label: '🔄 Simple Swap', prompt: 'Swap 0.05 ETH to USDC' },
-  { label: '📊 DCA Strategy', prompt: 'DCA 0.1 ETH into USDC over time' },
-  { label: '🚀 Launch Token', prompt: 'Launch a memecoin for the lobster community' },
+  { label: '🔄 Swap ETH→USDC', prompt: 'Swap 0.005 WETH to USDC' },
+  { label: '💰 Swap USDC→ETH', prompt: 'Swap 10 USDC to WETH' },
+  { label: '📊 DCA Strategy', prompt: 'DCA 0.01 ETH into USDC weekly' },
+  { label: '🛡️ Risk Assessment', prompt: 'Is it safe to swap 0.1 ETH to USDC right now?' },
 ]
 
 const MAX_DELIBERATION_RETRIES = 3
