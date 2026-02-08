@@ -36,4 +36,4 @@ export const POOL_KEY = {
   hooks: '0x0000000000000000000000000000000000000000' as const,
 }
 
-export const RPC_URL = process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC || 'https://sepolia.base.org'
+export const RPC_URL = process.env.BASE_SEPOLIA_RPC_URL || 'https://base-sepolia-rpc.publicnode.com'
