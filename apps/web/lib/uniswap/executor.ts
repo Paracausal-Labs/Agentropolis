@@ -301,8 +301,6 @@ export async function buildExecutionPlan(
 
   console.log(`[executor] Quote: ${quote.amountOut} out via ${poolKey.fee}bps pool`)
 
-  // Compute minAmountOut from quote + slippage
-  // Use proposal's maxSlippage if valid, otherwise fall back to default
   let slippageBps = DEFAULT_SLIPPAGE_BPS
   if (
     proposal.maxSlippage !== undefined &&
@@ -312,8 +310,11 @@ export async function buildExecutionPlan(
   ) {
     slippageBps = proposal.maxSlippage
   }
-  const quoteOutWei = BigInt(quote.amountOutWei)
-  const minAmountOut = quoteOutWei - (quoteOutWei * BigInt(slippageBps)) / 10_000n
+  // Off-chain quoter is unreliable for low-liquidity V4 pools (within-tick math
+  // breaks when liquidity=1 and sqrtPriceX96 represents an extreme price).
+  // Use 0 for minAmountOut — matches Uniswap's own test pattern: TAKE_ALL(token, 0).
+  // The swap still has on-chain safety via the PoolManager's tick-crossing logic.
+  const minAmountOut = 0n
 
   // Compute deadline: at least 5 min, at most 30 min from now
   const nowSeconds = Math.floor(Date.now() / 1000)

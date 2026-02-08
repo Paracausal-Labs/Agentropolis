@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAccount } from 'wagmi'
 
 const GUEST_SESSION_KEY = 'agentropolis_guest_session'
 const GUEST_SESSION_DURATION = 10 * 60 * 1000 // 10 minutes in milliseconds
@@ -14,12 +15,19 @@ interface GuestSession {
 
 export function GuestMode() {
   const router = useRouter()
+  const { isConnected } = useAccount()
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null)
   const [showWarning, setShowWarning] = useState(false)
   const [showExpiredModal, setShowExpiredModal] = useState(false)
 
-  // Initialize guest session
   useEffect(() => {
+    if (isConnected) {
+      localStorage.removeItem(GUEST_SESSION_KEY)
+      setTimeRemaining(null)
+      setShowExpiredModal(false)
+      return
+    }
+
     const storedSession = localStorage.getItem(GUEST_SESSION_KEY)
     let session: GuestSession
 
@@ -27,14 +35,12 @@ export function GuestMode() {
       session = JSON.parse(storedSession)
       const now = Date.now()
 
-      // Check if session has expired
       if (now >= session.expiresAt) {
         localStorage.removeItem(GUEST_SESSION_KEY)
         setShowExpiredModal(true)
         return
       }
     } else {
-      // Create new guest session
       const now = Date.now()
       session = {
         startTime: now,
@@ -43,10 +49,9 @@ export function GuestMode() {
       localStorage.setItem(GUEST_SESSION_KEY, JSON.stringify(session))
     }
 
-    // Set initial time remaining
     const remaining = session.expiresAt - Date.now()
     setTimeRemaining(Math.max(0, remaining))
-  }, [])
+  }, [isConnected])
 
   // Timer effect
   useEffect(() => {
@@ -107,19 +112,23 @@ export function GuestMode() {
   )
 }
 
-// Compact timer for bottom bar integration
 export function GuestModeTimer() {
+  const { isConnected } = useAccount()
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null)
   const [showWarning, setShowWarning] = useState(false)
 
   useEffect(() => {
+    if (isConnected) {
+      setTimeRemaining(null)
+      return
+    }
     const storedSession = localStorage.getItem(GUEST_SESSION_KEY)
     if (storedSession) {
       const session = JSON.parse(storedSession)
       const remaining = session.expiresAt - Date.now()
       setTimeRemaining(Math.max(0, remaining))
     }
-  }, [])
+  }, [isConnected])
 
   useEffect(() => {
     if (timeRemaining === null) return
@@ -160,15 +169,20 @@ export function GuestModeTimer() {
 }
 
 export function useGuestMode() {
+  const { isConnected } = useAccount()
   const [isGuest, setIsGuest] = useState(false)
 
   useEffect(() => {
+    if (isConnected) {
+      setIsGuest(false)
+      return
+    }
     const session = localStorage.getItem(GUEST_SESSION_KEY)
     if (session) {
       const parsed = JSON.parse(session)
       setIsGuest(Date.now() < parsed.expiresAt)
     }
-  }, [])
+  }, [isConnected])
 
   return isGuest
 }
