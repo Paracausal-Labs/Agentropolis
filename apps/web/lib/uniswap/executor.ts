@@ -17,6 +17,9 @@ import { CONTRACTS, RPC_URL, TOKEN_DECIMALS } from './constants'
 import { type PoolKey } from './pools'
 import { getBestFeeTier } from './fee-tier-router'
 
+const RECEIPT_TIMEOUT_MS = 120_000
+const MAX_UINT128 = (1n << 128n) - 1n
+
 const UNIVERSAL_ROUTER_ABI = [
   {
     type: 'function',
@@ -146,12 +149,36 @@ const parseAmount = (value: string | number, decimals: number) => {
 
 const DEFAULT_SLIPPAGE_BPS = 300 // 3% default slippage from quote
 
+function computeMinAmountOutWei(args: {
+  quoteAmountOutWei: bigint
+  expectedAmountOutWei: bigint
+  slippageBps: number
+}): bigint {
+  const { quoteAmountOutWei, expectedAmountOutWei, slippageBps } = args
+
+  let baseline = 0n
+  if (quoteAmountOutWei > 0n && expectedAmountOutWei > 0n) {
+    baseline = quoteAmountOutWei < expectedAmountOutWei ? quoteAmountOutWei : expectedAmountOutWei
+  } else {
+    baseline = quoteAmountOutWei > 0n ? quoteAmountOutWei : expectedAmountOutWei
+  }
+
+  if (baseline <= 0n) return 0n
+
+  const clampedSlippage = Math.max(0, Math.min(10_000, slippageBps))
+  const bps = BigInt(10_000 - clampedSlippage)
+  return (baseline * bps) / 10_000n
+}
+
 const encodeV4SwapInput = (
   amountIn: bigint,
   minAmountOut: bigint,
   zeroForOne: boolean,
   poolKey: PoolKey
 ): Hex => {
+  if (amountIn > MAX_UINT128) throw new Error('amountIn exceeds uint128')
+  if (minAmountOut > MAX_UINT128) throw new Error('minAmountOut exceeds uint128')
+
   const actions = encodePacked(
     ['uint8', 'uint8', 'uint8'],
     [V4_ACTIONS.SWAP_EXACT_IN_SINGLE, V4_ACTIONS.SETTLE_ALL, V4_ACTIONS.TAKE_ALL]
@@ -310,11 +337,15 @@ export async function buildExecutionPlan(
   ) {
     slippageBps = proposal.maxSlippage
   }
-  // Off-chain quoter is unreliable for low-liquidity V4 pools (within-tick math
-  // breaks when liquidity=1 and sqrtPriceX96 represents an extreme price).
-  // Use 0 for minAmountOut — matches Uniswap's own test pattern: TAKE_ALL(token, 0).
-  // The swap still has on-chain safety via the PoolManager's tick-crossing logic.
-  const minAmountOut = 0n
+  // Slippage protection.
+  // Baseline is conservative: min(quote.amountOutWei, proposal.expectedAmountOut), then apply slippageBps.
+  const quoteOutWei = BigInt(quote.amountOutWei)
+  const expectedOutWei = parseAmount(proposal.expectedAmountOut, getTokenDecimals(tokenOut))
+  const minAmountOut = computeMinAmountOutWei({
+    quoteAmountOutWei: quoteOutWei,
+    expectedAmountOutWei: expectedOutWei,
+    slippageBps,
+  })
 
   // Compute deadline: at least 5 min, at most 30 min from now
   const nowSeconds = Math.floor(Date.now() / 1000)
@@ -468,7 +499,7 @@ export const executeSwap = async (
       account,
       chain: walletClient.chain ?? null,
     })
-    await publicClient.waitForTransactionReceipt({ hash: approvalHash })
+    await publicClient.waitForTransactionReceipt({ hash: approvalHash, timeout: RECEIPT_TIMEOUT_MS })
   }
 
   // Step 4b: Permit2 approve Universal Router to spend
@@ -492,7 +523,7 @@ export const executeSwap = async (
       account,
       chain: walletClient.chain ?? null,
     })
-    await publicClient.waitForTransactionReceipt({ hash: permit2ApproveHash })
+    await publicClient.waitForTransactionReceipt({ hash: permit2ApproveHash, timeout: RECEIPT_TIMEOUT_MS })
   }
 
   // 5. Execute swap
@@ -509,7 +540,7 @@ export const executeSwap = async (
   })
 
   // 6. Wait for receipt + read balances after
-  const txReceipt = await publicClient.waitForTransactionReceipt({ hash: txHash })
+  const txReceipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: RECEIPT_TIMEOUT_MS })
   const balAfter = await readBalances(account, tokenIn, tokenOut, publicClient)
 
   // 7. Compute SwapReceipt

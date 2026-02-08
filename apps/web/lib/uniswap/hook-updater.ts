@@ -8,6 +8,8 @@ import { privateKeyToAccount } from 'viem/accounts'
 import { baseSepolia } from 'viem/chains'
 import { HOOKS, RPC_URL } from './constants'
 
+const RECEIPT_TIMEOUT_MS = 120_000
+
 const COUNCIL_FEE_HOOK_ABI = [
   {
     type: 'function',
@@ -72,8 +74,9 @@ export function validateHookParams(body: HookUpdateParams): { valid: boolean; er
     }
     try {
       const size = BigInt(body.maxSwapSize)
-      if (size <= 0n) {
-        return { valid: false, error: 'maxSwapSize must be positive' }
+      const MIN = BigInt('10000000000000000') // 0.01 ETH in wei
+      if (size < MIN) {
+        return { valid: false, error: 'maxSwapSize must be at least 0.01 ETH (in wei)' }
       }
       const MAX_REASONABLE = BigInt('1000000000000000000000000') // 1M ETH in wei
       if (size > MAX_REASONABLE) {
@@ -131,57 +134,84 @@ export async function executeHookUpdate(params: HookUpdateParams): Promise<HookU
   })
 
   const txHashes: string[] = []
+  const errors: string[] = []
+
+  const wait = (hash: `0x${string}`) =>
+    publicClient.waitForTransactionReceipt({ hash, timeout: RECEIPT_TIMEOUT_MS })
 
   // Update CouncilFeeHook
-  if (params.feeBps !== undefined && HOOKS.COUNCIL_FEE !== '0x0000000000000000000000000000000000000000') {
-    const hash = await walletClient.writeContract({
-      address: HOOKS.COUNCIL_FEE as Address,
-      abi: COUNCIL_FEE_HOOK_ABI,
-      functionName: 'setFee',
-      args: [params.feeBps],
-    })
-    await publicClient.waitForTransactionReceipt({ hash })
-    txHashes.push(hash)
-    console.log(`[Hooks] CouncilFeeHook fee updated to ${params.feeBps} bps, tx: ${hash}`)
+  if (params.feeBps !== undefined) {
+    if (HOOKS.COUNCIL_FEE === '0x0000000000000000000000000000000000000000') {
+      errors.push('COUNCIL_FEE hook address not configured')
+    } else {
+      try {
+        const hash = await walletClient.writeContract({
+          address: HOOKS.COUNCIL_FEE as Address,
+          abi: COUNCIL_FEE_HOOK_ABI,
+          functionName: 'setFee',
+          args: [params.feeBps],
+        })
+        await wait(hash)
+        txHashes.push(hash)
+        console.log(`[Hooks] CouncilFeeHook fee updated to ${params.feeBps} bps, tx: ${hash}`)
+      } catch (err) {
+        errors.push(`CouncilFeeHook update failed: ${err instanceof Error ? err.message : 'unknown error'}`)
+      }
+    }
   }
 
   // Update SwapGuardHook
-  if (params.maxSwapSize !== undefined && HOOKS.SWAP_GUARD !== '0x0000000000000000000000000000000000000000') {
-    const hash = await walletClient.writeContract({
-      address: HOOKS.SWAP_GUARD as Address,
-      abi: SWAP_GUARD_HOOK_ABI,
-      functionName: 'setMaxSwapSize',
-      args: [BigInt(params.maxSwapSize)],
-    })
-    await publicClient.waitForTransactionReceipt({ hash })
-    txHashes.push(hash)
-    console.log(`[Hooks] SwapGuardHook maxSwapSize updated to ${params.maxSwapSize}, tx: ${hash}`)
+  if (params.maxSwapSize !== undefined) {
+    if (HOOKS.SWAP_GUARD === '0x0000000000000000000000000000000000000000') {
+      errors.push('SWAP_GUARD hook address not configured')
+    } else {
+      try {
+        const hash = await walletClient.writeContract({
+          address: HOOKS.SWAP_GUARD as Address,
+          abi: SWAP_GUARD_HOOK_ABI,
+          functionName: 'setMaxSwapSize',
+          args: [BigInt(params.maxSwapSize)],
+        })
+        await wait(hash)
+        txHashes.push(hash)
+        console.log(`[Hooks] SwapGuardHook maxSwapSize updated to ${params.maxSwapSize}, tx: ${hash}`)
+      } catch (err) {
+        errors.push(`SwapGuardHook update failed: ${err instanceof Error ? err.message : 'unknown error'}`)
+      }
+    }
   }
 
   // Update SentimentOracleHook
-  if (
-    params.sentimentScore !== undefined &&
-    params.sentimentReason !== undefined &&
-    HOOKS.SENTIMENT_ORACLE !== '0x0000000000000000000000000000000000000000'
-  ) {
-    const hash = await walletClient.writeContract({
-      address: HOOKS.SENTIMENT_ORACLE as Address,
-      abi: SENTIMENT_ORACLE_HOOK_ABI,
-      functionName: 'updateSentiment',
-      args: [params.sentimentScore, params.sentimentReason],
-    })
-    await publicClient.waitForTransactionReceipt({ hash })
-    txHashes.push(hash)
-    console.log(`[Hooks] SentimentOracleHook updated to score=${params.sentimentScore}, tx: ${hash}`)
+  if (params.sentimentScore !== undefined || params.sentimentReason !== undefined) {
+    if (params.sentimentScore === undefined || params.sentimentReason === undefined) {
+      errors.push('Sentiment update requires both sentimentScore and sentimentReason')
+    } else if (HOOKS.SENTIMENT_ORACLE === '0x0000000000000000000000000000000000000000') {
+      errors.push('SENTIMENT_ORACLE hook address not configured')
+    } else {
+      try {
+        const hash = await walletClient.writeContract({
+          address: HOOKS.SENTIMENT_ORACLE as Address,
+          abi: SENTIMENT_ORACLE_HOOK_ABI,
+          functionName: 'updateSentiment',
+          args: [params.sentimentScore, params.sentimentReason],
+        })
+        await wait(hash)
+        txHashes.push(hash)
+        console.log(`[Hooks] SentimentOracleHook updated to score=${params.sentimentScore}, tx: ${hash}`)
+      } catch (err) {
+        errors.push(`SentimentOracleHook update failed: ${err instanceof Error ? err.message : 'unknown error'}`)
+      }
+    }
   }
 
   return {
-    success: true,
+    success: errors.length === 0,
     txHashes,
     updated: {
       fee: params.feeBps,
       maxSwapSize: params.maxSwapSize,
       sentiment: params.sentimentScore,
     },
+    error: errors.length ? errors.join(' | ') : undefined,
   }
 }
