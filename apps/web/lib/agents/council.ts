@@ -10,6 +10,7 @@ import type {
   ExternalAgentResponse,
 } from '@agentropolis/shared'
 import { TOKENS } from '../uniswap/constants'
+import { executeHookUpdate } from '../uniswap/hook-updater'
 import { FEE_CONFIG } from '../clanker/constants'
 import type { StrategyContext } from './strategies'
 
@@ -1209,36 +1210,25 @@ export function extractHookParameters(
 }
 
 /**
- * Push hook parameters to chain via the /api/hooks/update endpoint.
+ * Push hook parameters to chain directly (no HTTP roundtrip).
  * Called after council deliberation completes.
  */
 export async function updateHookParameters(params: HookParameters): Promise<void> {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
-    const res = await fetch(`${baseUrl}/api/hooks/update`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-hook-auth': process.env.HOOK_AUTH_SECRET ?? '',
-      },
-      body: JSON.stringify({
-        feeBps: params.feeBps,
-        maxSwapSize: params.maxSwapSize,
-        sentimentScore: params.sentimentScore,
-        sentimentReason: params.sentimentReason,
-      }),
+    const result = await executeHookUpdate({
+      feeBps: params.feeBps,
+      maxSwapSize: params.maxSwapSize,
+      sentimentScore: params.sentimentScore,
+      sentimentReason: params.sentimentReason,
     })
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      console.error('[Council→Hooks] Update failed:', err)
+    if (!result.success) {
+      console.error('[Council→Hooks] Update failed:', result.error)
       return
     }
 
-    const result = await res.json()
     console.log('[Council→Hooks] Parameters updated on-chain:', result)
   } catch (err) {
-    // Non-fatal: hooks update is best-effort, don't block deliberation
     console.error('[Council→Hooks] Failed to update hook parameters:', err)
   }
 }
