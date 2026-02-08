@@ -80,6 +80,9 @@ TESTING.md
 testing.md
 logs.md
 scripts/
+browser-test-results.md
+web-testing.md
+notes.txt
 
 # Test screenshots
 *.png
