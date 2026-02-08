@@ -635,12 +635,13 @@ ${discussion}
 Based on the council's input, create a final proposal. Weight the Risk Sentinel's concerns heavily.
 If there was a VETO, recommend a safer alternative.
 IMPORTANT: Respect the user's explicitly stated strategy intent unless there's a critical risk.
+IMPORTANT: tokenIn and tokenOut MUST be different tokens. If tokenIn is "USDC", tokenOut MUST be "WETH" and vice versa.
 
 Respond with JSON:
 {
   "finalStrategy": "swap" | "dca",
   "tokenIn": "USDC" | "WETH",
-  "tokenOut": "USDC" | "WETH",
+  "tokenOut": "USDC" | "WETH" (MUST differ from tokenIn),
   "amountIn": "numeric value only (e.g., 0.05)",
   "expectedAmountOut": "numeric value only (e.g., 165) - NO text, NO units, just the number",
   "maxSlippage": 50,
@@ -752,6 +753,12 @@ async function callClerk(groq: Groq, prompt: string): Promise<ClerkSynthesis> {
   if (!validTokens.includes(parsed.tokenOut)) {
     console.warn(`[Council] Clerk suggested invalid tokenOut: ${parsed.tokenOut}, defaulting to USDC`)
     parsed.tokenOut = 'USDC'
+  }
+
+  // Guard: tokenIn and tokenOut must differ — swap if LLM returned same token
+  if (parsed.tokenIn === parsed.tokenOut) {
+    console.warn(`[Council] Clerk returned same token for in/out (${parsed.tokenIn}), flipping tokenOut`)
+    parsed.tokenOut = parsed.tokenIn === 'USDC' ? 'WETH' : 'USDC'
   }
 
   return parsed
