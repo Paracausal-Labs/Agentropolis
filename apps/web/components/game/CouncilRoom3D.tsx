@@ -157,11 +157,13 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
                     walletAddress: address,
                     deployedAgents: gameState.deployedAgents.map(a => {
                         const agentConfig = MOCK_AGENTS.find(m => m.id === a.agentId)
-                        return {
-                            id: a.agentId,
-                            name: agentConfig?.name || a.agentId,
-                            strategy: agentConfig?.strategy,
-                        }
+                        if (agentConfig) return { id: a.agentId, name: agentConfig.name, strategy: agentConfig.strategy }
+                        try {
+                            const custom: { id: string; name: string; strategy: string; txHash?: string }[] = JSON.parse(localStorage.getItem('agentropolis_custom_agents') || '[]')
+                            const found = custom.find(c => c.id === a.agentId)
+                            if (found) return { id: a.agentId, name: found.name, strategy: found.strategy }
+                        } catch { /* ignore */ }
+                        return { id: a.agentId, name: `Agent #${a.agentId}`, strategy: 'custom' }
                     }),
                 }),
                 signal: controller.signal,

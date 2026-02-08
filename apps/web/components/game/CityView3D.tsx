@@ -299,7 +299,14 @@ function AgentPanel({
         riskTolerance: 'moderate',
         description: ''
     })
-    const [customAgents, setCustomAgents] = useState<{ id: string; name: string; strategy: string; reputation: number; type: string; txHash?: string }[]>([])
+    const CUSTOM_AGENTS_KEY = 'agentropolis_custom_agents'
+    const [customAgents, setCustomAgents] = useState<{ id: string; name: string; strategy: string; reputation: number; type: string; txHash?: string }[]>(() => {
+        if (typeof window === 'undefined') return []
+        try {
+            const stored = localStorage.getItem(CUSTOM_AGENTS_KEY)
+            return stored ? JSON.parse(stored) : []
+        } catch { return [] }
+    })
     const processedHashRef = useRef<string | null>(null)
     const formDataRef = useRef(formData)
     formDataRef.current = formData
@@ -326,7 +333,11 @@ function AgentPanel({
                     txHash: hash
                 }
                 
-                setCustomAgents(prev => [...prev, newAgent])
+                setCustomAgents(prev => {
+                    const updated = [...prev, newAgent]
+                    localStorage.setItem(CUSTOM_AGENTS_KEY, JSON.stringify(updated))
+                    return updated
+                })
                 
                 fetch('/api/agents/metadata', {
                     method: 'POST',
