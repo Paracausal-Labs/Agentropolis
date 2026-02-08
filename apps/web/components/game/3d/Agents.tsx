@@ -160,7 +160,7 @@ export function Agent3D({
 
             {/* Name Tag (HTML) */}
             {(showNameTag || isHovered || isSelected) && (
-                <Html position={[0, 2.2, 0]} center>
+                <Html position={[0, 2.2, 0]} center zIndexRange={[0, 0]}>
                     <div className="flex flex-col items-center pointer-events-none whitespace-nowrap">
                         <div className="bg-black/80 backdrop-blur border border-[#FCEE0A] px-2 py-1 rounded text-xs font-bold text-[#FCEE0A] uppercase tracking-wider mb-1">
                             {agent.name}
@@ -264,7 +264,7 @@ export function FloatingText({ position, text, color = '#FCEE0A', onComplete }: 
 
     return (
         <group ref={ref} position={position}>
-            <Html center>
+            <Html center zIndexRange={[0, 0]}>
                 <div
                     className="pointer-events-none font-bold text-xl select-none"
                     style={{

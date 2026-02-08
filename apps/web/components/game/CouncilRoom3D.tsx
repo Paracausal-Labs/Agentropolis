@@ -290,7 +290,7 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
                     onClick={() => handleAgentClick('alphaHunter')}
                     onPointerOver={() => setHoveredAgent('alphaHunter')}
                     onPointerOut={() => setHoveredAgent(null)}
-                    showNameTag={hoveredAgent === 'alphaHunter' || selectedAgent === 'alphaHunter'}
+                    showNameTag
                 />
 
                 {/* Chair 1: [2.5, 0, -3] -> Risk Sentinel */}
@@ -303,7 +303,7 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
                     onClick={() => handleAgentClick('riskSentinel')}
                     onPointerOver={() => setHoveredAgent('riskSentinel')}
                     onPointerOut={() => setHoveredAgent(null)}
-                    showNameTag={hoveredAgent === 'riskSentinel' || selectedAgent === 'riskSentinel'}
+                    showNameTag
                 />
 
                 {/* Chair 2: [-2.5, 0, 3] -> Macro Oracle */}
@@ -316,7 +316,7 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
                     onClick={() => handleAgentClick('macroOracle')}
                     onPointerOver={() => setHoveredAgent('macroOracle')}
                     onPointerOut={() => setHoveredAgent(null)}
-                    showNameTag={hoveredAgent === 'macroOracle' || selectedAgent === 'macroOracle'}
+                    showNameTag
                 />
 
                 {/* Chair 3: [2.5, 0, 3] -> Devils Advocate */}
@@ -329,7 +329,7 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
                     onClick={() => handleAgentClick('devilsAdvocate')}
                     onPointerOver={() => setHoveredAgent('devilsAdvocate')}
                     onPointerOut={() => setHoveredAgent(null)}
-                    showNameTag={hoveredAgent === 'devilsAdvocate' || selectedAgent === 'devilsAdvocate'}
+                    showNameTag
                 />
 
                 {/* Chair 4: [-5, 0, 0] -> Council Clerk */}
@@ -342,7 +342,7 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
                     onClick={() => handleAgentClick('councilClerk')}
                     onPointerOver={() => setHoveredAgent('councilClerk')}
                     onPointerOut={() => setHoveredAgent(null)}
-                    showNameTag={hoveredAgent === 'councilClerk' || selectedAgent === 'councilClerk'}
+                    showNameTag
                 />
 
                 {/* Chair 5: [5, 0, 0] -> User */}
@@ -562,7 +562,7 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
 
                 {/* Proposal Result Card */}
                 {proposal && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm pointer-events-auto z-50">
+                    <div className="absolute inset-0 flex items-center justify-center bg-[#050510] pointer-events-auto z-[100]">
                         <ProposalCard proposal={proposal} opinions={opinions} onResolve={() => { setProposal(null); setOpinions([]) }} />
                     </div>
                 )}
