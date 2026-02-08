@@ -1,6 +1,7 @@
 {
   "name": "@agentropolis/web",
   "version": "0.1.0",
+  "description": "Next.js frontend for Agentropolis - Cyberpunk DeFi City Builder",
   "private": true,
   "scripts": {
     "dev": "next dev",
