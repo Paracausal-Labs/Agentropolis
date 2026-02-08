@@ -1,9 +1,9 @@
 'use client'
 
-import { useRef, useMemo } from 'react'
+import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { Text, Html, useTexture } from '@react-three/drei'
+import { Text } from '@react-three/drei'
 import Scene3D from './Scene3D'
 import { COLORS, CONFERENCE_ROOM_CONFIG } from '@/lib/game-constants'
 import { Agent3D } from './3d/Agents'

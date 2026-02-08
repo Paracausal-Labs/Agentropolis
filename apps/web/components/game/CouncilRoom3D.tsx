@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { Text, Html } from '@react-three/drei'
+import { Text } from '@react-three/drei'
 import Scene3D from './Scene3D'
 import { Agent3D } from './3d/Agents'
 import { COLORS, AGENT_TYPES, PRESET_PROMPTS, CONFERENCE_ROOM_CONFIG, MOCK_AGENTS } from '@/lib/game-constants'
