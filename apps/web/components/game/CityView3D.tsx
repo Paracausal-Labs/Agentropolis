@@ -301,7 +301,7 @@ function AgentMarketplace({ onClose }: { onClose: () => void }) {
     }, [])
 
     return (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+        <div className="absolute inset-0 z-[100] flex items-center justify-center bg-[#050510]">
             <div className="w-[600px] max-h-[80vh] bg-[#050510] border border-[#FCEE0A]/40 overflow-hidden">
                 <div className="flex items-center justify-between px-5 py-3 bg-[#FCEE0A]/10 border-b border-[#FCEE0A]/30">
                     <div>
