@@ -72,17 +72,21 @@ CONTEXT.md
 context.md
 WORKPLAN.md
 AUDIT.md
+audit.md
+audit-findings.md
 GAMEDESIGN.md
 AUDIT_*.md
 LOGIC_AUDIT*.md
 AGENTIC_FINANCE_PLAN.md
 TESTING.md
 testing.md
+DEMO.md
 logs.md
+memory.md
 scripts/
 browser-test-results.md
 web-testing.md
-notes.txt
+*.txt
 
 # Test screenshots
 *.png
@@ -93,4 +97,4 @@ notes.txt
 *.mov
 *.avi
 *.mkv
-discordchats.txt
+
