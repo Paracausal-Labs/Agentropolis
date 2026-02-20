@@ -1,0 +1,9 @@
+# What Problem Does Agentropolis Solve?
+
+The problem with Decentralized Finance (DeFi) today is that it’s overwhelmingly complex and lonely. Imagine trying to make investment decisions while staring at confusing charts, cryptic codes, and endless spreadsheets, knowing a single wrong click could cost you money. It feels like piloting a spaceship without a manual. Most people want to participate but are scared off by the technical jargon and lack of guidance. They don't have a team of financial experts to double-check their logic or explain risks in plain English.
+
+# How Agentropolis Works (The "SimCity for Finance" Solution)
+
+Agentropolis transforms this intimidating experience into a friendly, city-building game. Instead of navigating confusing menus, you simply **build a digital city and hire a team of AI assistants** who live there. Think of them as your personal financial council. You walk your character into a "Council Room" where cute, animated characters (like a cautious "Risk Manager" or an ambitious "Profit Hunter") are sitting around a table. You just ask them a simple question like, *"How should I invest $100 safely?"*
+
+The magic happens next: The AI agents **debate your question in real-time**. You watch them discuss the pros and cons—your Risk Manager might say, *"Wait, the market is too volatile right now!"* while the Profit Hunter argues, *"But the potential returns are high!"* They simplify complex data into a clear conversation you can understand. Once they agree on a plan, they present it to you. You simply click **"Approve,"** and the game handles all the complicated technical steps securely in the background. It turns finance from a solitary, stressful task into a collaborative, gamified experience where you always have a team of experts by your side.

@@ -128,16 +128,16 @@ export class CouncilScene extends Phaser.Scene {
 
   private drawRoundtable(x: number, y: number) {
     const graphics = this.add.graphics()
-    
+
     graphics.fillStyle(0x78350f, 1)
     graphics.fillEllipse(x, y + 20, 400, 180)
-    
+
     graphics.fillStyle(0x92400e, 1)
     graphics.fillEllipse(x, y, 400, 180)
-    
+
     graphics.lineStyle(3, 0xfbbf24, 0.5)
     graphics.strokeEllipse(x, y, 400, 180)
-    
+
     const innerGraphics = this.add.graphics()
     innerGraphics.fillStyle(0x451a03, 1)
     innerGraphics.fillEllipse(x, y, 300, 130)
@@ -234,39 +234,39 @@ export class CouncilScene extends Phaser.Scene {
 
   private createProposalCard(x: number, y: number) {
     this.proposalCard = this.add.container(x, y)
-    
+
     const cardWidth = 500
     const cardHeight = 160
-    
+
     const bg = this.add.graphics()
     bg.fillStyle(0x1e293b, 1)
     bg.fillRoundedRect(-cardWidth / 2, -cardHeight / 2, cardWidth, cardHeight, 12)
     bg.lineStyle(2, 0x475569)
     bg.strokeRoundedRect(-cardWidth / 2, -cardHeight / 2, cardWidth, cardHeight, 12)
     this.proposalCard.add(bg)
-    
+
     const loadingText = this.add.text(0, 0, 'Waiting for proposal...', {
       fontSize: '16px',
       color: '#94a3b8',
       fontFamily: 'Arial',
     }).setOrigin(0.5)
     this.proposalCard.add(loadingText)
-    
+
     this.approveBtn = this.createButton(x - 80, y + 110, 'APPROVE', 0x22c55e, () => this.handleApprove())
     this.rejectBtn = this.createButton(x + 80, y + 110, 'REJECT', 0xef4444, () => this.handleReject())
-    
+
     this.approveBtn.setVisible(false)
     this.rejectBtn.setVisible(false)
   }
 
   private createButton(x: number, y: number, text: string, color: number, onClick: () => void): Phaser.GameObjects.Container {
     const container = this.add.container(x, y)
-    
+
     const bg = this.add.graphics()
     bg.fillStyle(color, 1)
     bg.fillRoundedRect(-60, -18, 120, 36, 8)
     container.add(bg)
-    
+
     const label = this.add.text(0, 0, text, {
       fontSize: '14px',
       color: '#ffffff',
@@ -274,25 +274,25 @@ export class CouncilScene extends Phaser.Scene {
       fontStyle: 'bold',
     }).setOrigin(0.5)
     container.add(label)
-    
+
     container.setInteractive(new Phaser.Geom.Rectangle(-60, -18, 120, 36), Phaser.Geom.Rectangle.Contains)
-    
+
     container.on('pointerover', () => {
       bg.clear()
       bg.fillStyle(Phaser.Display.Color.ValueToColor(color).lighten(20).color, 1)
       bg.fillRoundedRect(-60, -18, 120, 36, 8)
       this.input.setDefaultCursor('pointer')
     })
-    
+
     container.on('pointerout', () => {
       bg.clear()
       bg.fillStyle(color, 1)
       bg.fillRoundedRect(-60, -18, 120, 36, 8)
       this.input.setDefaultCursor('default')
     })
-    
+
     container.on('pointerdown', onClick)
-    
+
     return container
   }
 
@@ -528,9 +528,19 @@ export class CouncilScene extends Phaser.Scene {
       repeat: -1,
     })
 
+    // Charge Yellow fee for deliberation (soft — don't block on failure)
+    if (typeof window !== 'undefined' && window.agentropolis?.isSessionActive?.()) {
+      try {
+        await window.agentropolis.chargeAction('deliberation', '0.005')
+        console.log('[CouncilScene] Deliberation fee charged: 0.005 ytest.USD')
+      } catch (err) {
+        console.warn('[CouncilScene] Deliberation fee charge failed (proceeding anyway):', err)
+      }
+    }
+
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-      
+
       // Guest session key matches GuestMode.tsx
       const guestSessionData = typeof localStorage !== 'undefined' ? localStorage.getItem('agentropolis_guest_session') : null
       if (guestSessionData) {
@@ -595,9 +605,9 @@ export class CouncilScene extends Phaser.Scene {
       this.displayProposal(data.proposal)
     } catch (err) {
       console.error('[CouncilScene] Deliberation failed:', err)
-      
+
       this.deliberationRetries++
-      
+
       if (this.loadingText) {
         if (this.deliberationRetries < MAX_DELIBERATION_RETRIES) {
           this.loadingText.setText(`❌ Deliberation failed. Retrying (${this.deliberationRetries}/${MAX_DELIBERATION_RETRIES})...`)
@@ -674,9 +684,9 @@ export class CouncilScene extends Phaser.Scene {
 
   private displayProposal(proposal: Proposal) {
     this.currentProposal = proposal
-    
+
     if (!this.proposalCard) return
-    
+
     while (this.proposalCard.list.length > 1) {
       const child = this.proposalCard.list[this.proposalCard.list.length - 1]
       if (child instanceof Phaser.GameObjects.GameObject) child.destroy()
@@ -686,10 +696,10 @@ export class CouncilScene extends Phaser.Scene {
     this.proposalCard.setVisible(true)
     this.proposalCard.setAlpha(0)
     this.proposalCard.setScale(0.9)
-    
+
     const riskColors: Record<string, number> = { low: 0x22c55e, medium: 0xeab308, high: 0xef4444 }
     const riskColor = riskColors[proposal.riskLevel] || 0x94a3b8
-    
+
     const riskIndicator = this.add.graphics()
     riskIndicator.fillStyle(riskColor, 1)
     riskIndicator.fillRoundedRect(-250, -80, 6, 160, 3)
@@ -708,7 +718,7 @@ export class CouncilScene extends Phaser.Scene {
       duration: 300,
       ease: 'Back.easeOut',
     })
-    
+
     this.approveBtn?.setVisible(true)
     this.rejectBtn?.setVisible(true)
 
@@ -754,7 +764,7 @@ export class CouncilScene extends Phaser.Scene {
       fontStyle: 'bold',
     }).setOrigin(0.5)
     this.proposalCard.add(swapText)
-    
+
     const reasonText = this.add.text(0, 15, proposal.reasoning.substring(0, 80), {
       fontSize: '12px',
       color: '#94a3b8',
@@ -776,8 +786,8 @@ export class CouncilScene extends Phaser.Scene {
       fontStyle: 'bold',
     }).setOrigin(0.5)
     this.proposalCard.add(title)
-    
-    const tokenText = this.add.text(0, -25, 
+
+    const tokenText = this.add.text(0, -25,
       `${proposal.tokenName} ($${proposal.tokenSymbol})`, {
       fontSize: '20px',
       color: '#ffffff',
@@ -785,7 +795,7 @@ export class CouncilScene extends Phaser.Scene {
       fontStyle: 'bold',
     }).setOrigin(0.5)
     this.proposalCard.add(tokenText)
-    
+
     const descText = this.add.text(0, 5, proposal.tokenDescription, {
       fontSize: '12px',
       color: '#94a3b8',
@@ -836,9 +846,9 @@ export class CouncilScene extends Phaser.Scene {
 
   private handleApprove() {
     if (!this.currentProposal) return
-    
+
     console.log('[CouncilScene] Proposal approved:', this.currentProposal.id)
-    
+
     if (isTokenLaunchProposal(this.currentProposal)) {
       this.game.events.emit('tokenLaunchApproved', this.currentProposal)
       this.showResult('🚀 Launching token...', 0xf97316)
@@ -889,5 +899,5 @@ export class CouncilScene extends Phaser.Scene {
     })
   }
 
-  update() {}
+  update() { }
 }

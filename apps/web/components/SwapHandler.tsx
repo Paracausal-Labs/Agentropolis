@@ -30,6 +30,18 @@ export function SwapHandler() {
 
       setResult({ status: 'quoting' })
 
+      // Charge Yellow fee for swap/LP execution (soft — don't block on failure)
+      if (typeof window !== 'undefined' && window.agentropolis?.isSessionActive?.()) {
+        try {
+          const isLp = proposal.strategyType === 'lp_full_range' || proposal.strategyType === 'lp_concentrated'
+          const chargeType = isLp ? 'lp_position' : 'swap'
+          await window.agentropolis.chargeAction(chargeType, '0.005')
+          console.log(`[SwapHandler] Yellow fee charged: ${chargeType} = 0.005 ytest.USD`)
+        } catch (err) {
+          console.warn('[SwapHandler] Yellow fee charge failed (proceeding anyway):', err)
+        }
+      }
+
       try {
         setResult({ status: 'pending' })
         const executionResult = await execute(proposal)

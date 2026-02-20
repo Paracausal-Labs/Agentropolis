@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import { ConnectButton } from '@/components/ConnectButton'
 import { SessionStatus } from '@/components/SessionProvider'
 import { SwapHandler } from '@/components/SwapHandler'
+import { SessionEconomics } from '@/components/SessionEconomics'
 import { GuestMode } from '@/components/GuestMode'
 import { useGame } from '@/contexts/GameContext'
 
@@ -55,7 +56,7 @@ export function AppPageContent() {
           <div className="flex gap-4 items-center">
             {/* Yellow Session Status */}
             <SessionStatus />
-            
+
             {/* Live Status */}
             <div className="cyber-panel px-4 py-2 flex flex-col items-center justify-center min-w-[80px]">
               <span className="text-[10px] text-gray-400 uppercase tracking-wider">Status</span>
@@ -148,6 +149,7 @@ export function AppPageContent() {
 
       {/* Functional Components */}
       <SwapHandler />
+      <SessionEconomics />
       <GuestMode />
     </div>
   )

@@ -13,6 +13,12 @@ import {
 } from '@/lib/yellow/channel'
 import { YELLOW_DEFAULTS, formatYtestUsd } from '@/lib/yellow/constants'
 
+export interface ChargeEntry {
+  type: string
+  amount: string
+  timestamp: number
+}
+
 export type SessionStatus = 'disconnected' | 'connecting' | 'active' | 'settling' | 'settled' | 'error'
 
 export interface SessionState {
@@ -23,6 +29,7 @@ export interface SessionState {
   depositTxHash?: string
   error?: string
   isDeposited: boolean
+  chargeHistory: ChargeEntry[]
 }
 
 interface SessionContextValue {
@@ -34,6 +41,7 @@ interface SessionContextValue {
   chargeAgentDeploy: () => Promise<TransferResult>
   executeTransfer: (destination: string, amount: bigint) => Promise<TransferResult>
   withdraw: (amount?: bigint) => Promise<WithdrawalResult>
+  chargeHistory: ChargeEntry[]
   isLoading: boolean
 }
 
@@ -54,7 +62,7 @@ function mapChannelStatusToSession(channelStatus: ChannelStatus): SessionStatus 
   return mapping[channelStatus]
 }
 
-function createSessionState(channelState: ChannelState, actionBalance: bigint): SessionState {
+function createSessionState(channelState: ChannelState, actionBalance: bigint, chargeHistory: ChargeEntry[]): SessionState {
   return {
     status: mapChannelStatusToSession(channelState.status),
     balance: formatYtestUsd(actionBalance),
@@ -63,6 +71,7 @@ function createSessionState(channelState: ChannelState, actionBalance: bigint): 
     depositTxHash: channelState.txHash,
     error: channelState.error,
     isDeposited: channelState.depositAmount > BigInt(0),
+    chargeHistory,
   }
 }
 
@@ -77,6 +86,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     balance: BigInt(0),
   })
   const [actionBalance, setActionBalance] = useState<bigint>(BigInt(0))
+  const [chargeHistory, setChargeHistory] = useState<ChargeEntry[]>([])
 
   useEffect(() => {
     const mgr = createChannelManager(
@@ -88,7 +98,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setActionBalance(mgr.state.balance)
   }, [publicClient, walletClient])
 
-  const state = createSessionState(channelState, actionBalance)
+  const state = createSessionState(channelState, actionBalance, chargeHistory)
 
   const isLoading = ['approving', 'depositing', 'connecting', 'creating', 'closing'].includes(channelState.status)
 
@@ -169,6 +179,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
     setActionBalance(result.newBalance)
     setChannelState(manager.state)
+    setChargeHistory(prev => [...prev, { type, amount, timestamp: Date.now() }])
 
     console.log(`[Session] ${type} charged: -${amount}, balance: ${formatYtestUsd(result.newBalance)}`)
   }, [manager, channelState.status, actionBalance])
@@ -195,6 +206,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (result.success) {
       setActionBalance(result.newBalance)
       setChannelState(manager.state)
+      setChargeHistory(prev => [...prev, { type: 'agent-deploy', amount: formatYtestUsd(deployCost), timestamp: Date.now() }])
     }
     
     return result
@@ -237,6 +249,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       chargeAgentDeploy,
       executeTransfer,
       withdraw,
+      chargeHistory,
       isLoading,
     }}>
       {children}

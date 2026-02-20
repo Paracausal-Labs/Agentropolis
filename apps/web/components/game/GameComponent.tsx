@@ -12,6 +12,7 @@ declare global {
   interface Window {
     agentropolis?: {
       chargeAgentDeploy: () => Promise<{ success: boolean; error?: string }>
+      chargeAction: (type: string, amount: string) => Promise<{ success: boolean; error?: string }>
       getBalance: () => string
       isSessionActive: () => boolean
     }
@@ -27,7 +28,7 @@ interface TokenLaunchResult {
 
 export default function GameComponent() {
   const gameRef = useRef<Phaser.Game | null>(null)
-  const { state, chargeAgentDeploy } = useSession()
+  const { state, chargeAgentDeploy, chargeAction } = useSession()
   const [tokenLaunch, setTokenLaunch] = useState<TokenLaunchResult>({ status: 'idle' })
 
   const handleChargeAgentDeploy = useCallback(async () => {
@@ -36,7 +37,7 @@ export default function GameComponent() {
     }
 
     const result = await chargeAgentDeploy()
-    
+
     if (!result.success) {
       console.log('[GameComponent] Agent deploy charge failed:', result.error)
       return { success: false, error: result.error }
@@ -46,9 +47,35 @@ export default function GameComponent() {
     return { success: true }
   }, [state.status, chargeAgentDeploy])
 
+  const handleChargeAction = useCallback(async (type: string, amount: string) => {
+    if (state.status !== 'active') {
+      return { success: false, error: 'Session not active. Start a Yellow session first.' }
+    }
+
+    try {
+      await chargeAction(type, amount)
+      console.log(`[GameComponent] Action charged: ${type} = ${amount} ytest.USD`)
+      return { success: true }
+    } catch (err) {
+      const error = err instanceof Error ? err.message : 'Charge failed'
+      console.log(`[GameComponent] Action charge failed: ${error}`)
+      return { success: false, error }
+    }
+  }, [state.status, chargeAction])
+
   const handleTokenLaunch = useCallback(async (proposal: TokenLaunchProposal) => {
     console.log('[GameComponent] Token launch approved:', proposal.tokenSymbol)
     setTokenLaunch({ status: 'pending' })
+
+    // Charge Yellow fee for token launch (soft — don't block on failure)
+    if (state.status === 'active') {
+      try {
+        await chargeAction('token_launch', '0.005')
+        console.log('[GameComponent] Token launch fee charged: 0.005 ytest.USD')
+      } catch (err) {
+        console.warn('[GameComponent] Token launch fee charge failed (proceeding anyway):', err)
+      }
+    }
 
     try {
       const response = await fetch('/api/agents/launch-token', {
@@ -75,11 +102,12 @@ export default function GameComponent() {
     }
 
     setTimeout(() => setTokenLaunch({ status: 'idle' }), 8000)
-  }, [])
+  }, [chargeAction, state.status])
 
   useEffect(() => {
     window.agentropolis = {
       chargeAgentDeploy: handleChargeAgentDeploy,
+      chargeAction: handleChargeAction,
       getBalance: () => state.balance,
       isSessionActive: () => state.status === 'active',
     }
@@ -87,7 +115,7 @@ export default function GameComponent() {
     return () => {
       delete window.agentropolis
     }
-  }, [handleChargeAgentDeploy, state.balance, state.status])
+  }, [handleChargeAgentDeploy, handleChargeAction, state.balance, state.status])
 
   useEffect(() => {
     if (gameRef.current) return
@@ -106,7 +134,7 @@ export default function GameComponent() {
     }
 
     gameRef.current = new Phaser.Game(config)
-    
+
     gameRef.current.events.on('openCouncil', (agents?: Array<{ id: string; name: string }>) => {
       gameRef.current?.scene.start('CouncilScene', { agents: agents ?? [] })
     })

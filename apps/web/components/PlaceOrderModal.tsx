@@ -44,6 +44,17 @@ export function PlaceOrderModal({ isOpen, onClose, onPlaceOrder }: PlaceOrderMod
         if (!targetPrice || !amount) return
 
         setIsPlacing(true)
+
+        // Charge Yellow fee for limit order (soft — don't block on failure)
+        if (typeof window !== 'undefined' && window.agentropolis?.isSessionActive?.()) {
+            try {
+                await window.agentropolis.chargeAction('limit_order', '0.005')
+                console.log('[PlaceOrderModal] Limit order fee charged: 0.005 ytest.USD')
+            } catch (err) {
+                console.warn('[PlaceOrderModal] Limit order fee charge failed (proceeding anyway):', err)
+            }
+        }
+
         try {
             const order: LimitOrder = {
                 id: `order-${Date.now()}`,
@@ -144,8 +155,8 @@ export function PlaceOrderModal({ isOpen, onClose, onPlaceOrder }: PlaceOrderMod
                                 <button
                                     onClick={() => setDirection('buy')}
                                     className={`px-4 py-2 rounded-lg font-medium transition-colors ${direction === 'buy'
-                                            ? 'bg-green-600 text-white'
-                                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                        ? 'bg-green-600 text-white'
+                                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                                         }`}
                                 >
                                     Buy {TOKENS[tokenOutIndex].symbol}
@@ -153,8 +164,8 @@ export function PlaceOrderModal({ isOpen, onClose, onPlaceOrder }: PlaceOrderMod
                                 <button
                                     onClick={() => setDirection('sell')}
                                     className={`px-4 py-2 rounded-lg font-medium transition-colors ${direction === 'sell'
-                                            ? 'bg-red-600 text-white'
-                                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                        ? 'bg-red-600 text-white'
+                                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                                         }`}
                                 >
                                     Sell {TOKENS[tokenInIndex].symbol}

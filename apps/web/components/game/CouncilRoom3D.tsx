@@ -91,6 +91,16 @@ export default function CouncilRoom3D({ onBack }: { onBack: () => void }) {
         setProposal(null)
         actions.startDeliberation()
 
+        // Charge Yellow fee for deliberation (soft — don't block on failure)
+        if (typeof window !== 'undefined' && window.agentropolis?.isSessionActive?.()) {
+            try {
+                await window.agentropolis.chargeAction('deliberation', '0.005')
+                console.log('[CouncilRoom3D] Deliberation fee charged: 0.005 ytest.USD')
+            } catch (err) {
+                console.warn('[CouncilRoom3D] Deliberation fee charge failed (proceeding anyway):', err)
+            }
+        }
+
         // Mock Sequence
         const activeAgents = ['alphaHunter', 'riskSentinel', 'macroOracle', 'devilsAdvocate', 'councilClerk']
 
