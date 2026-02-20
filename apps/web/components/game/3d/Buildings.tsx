@@ -17,8 +17,8 @@ interface BuildingProps {
 }
 
 export function Building({ position, width, height, depth, type, onClick, isHovered }: BuildingProps) {
-    const meshRef = useRef<THREE.Mesh>(null)
-    const edgesRef = useRef<THREE.LineSegments>(null)
+    const meshRef = useRef<any>(null)
+    const edgesRef = useRef<any>(null)
 
     // Building visual config based on type
     const config = useMemo(() => {
@@ -162,7 +162,7 @@ export function Building({ position, width, height, depth, type, onClick, isHove
 
             {/* Neon edges */}
             <lineSegments ref={edgesRef}>
-                <edgesGeometry args={[new THREE.BoxGeometry(width, height, depth)]} />
+                <edgesGeometry args={[new THREE.BoxGeometry(width, height, depth) as any]} />
                 <lineBasicMaterial
                     color={config.edgeColor}
                     transparent
@@ -273,7 +273,7 @@ export function Road({ position, width, length, rotation = 0 }: {
 }
 
 export function StreetLamp({ position }: { position: [number, number, number] }) {
-    const lightRef = useRef<THREE.PointLight>(null)
+    const lightRef = useRef<any>(null)
 
     // Flicker effect
     useFrame(() => {
@@ -342,8 +342,8 @@ interface LimitOrderTowerProps {
 }
 
 export function LimitOrderTower({ position, order, onClick }: LimitOrderTowerProps) {
-    const meshRef = useRef<THREE.Mesh>(null)
-    const glowRef = useRef<THREE.PointLight>(null)
+    const meshRef = useRef<any>(null)
+    const glowRef = useRef<any>(null)
 
     const config = useMemo(() => {
         switch (order.status) {
@@ -389,7 +389,7 @@ export function LimitOrderTower({ position, order, onClick }: LimitOrderTowerPro
             </mesh>
 
             <lineSegments position={[0, h / 2, 0]}>
-                <edgesGeometry args={[new THREE.BoxGeometry(w, h, w)]} />
+                <edgesGeometry args={[new THREE.BoxGeometry(w, h, w) as any]} />
                 <lineBasicMaterial color={config.edgeColor} transparent opacity={0.6} />
             </lineSegments>
 
@@ -431,7 +431,7 @@ export function LimitOrderTower({ position, order, onClick }: LimitOrderTowerPro
 
             {order.status === 'construction' && (
                 <lineSegments position={[0, h / 2, 0]}>
-                    <edgesGeometry args={[new THREE.BoxGeometry(w + 0.3, h + 0.3, w + 0.3)]} />
+                    <edgesGeometry args={[new THREE.BoxGeometry(w + 0.3, h + 0.3, w + 0.3) as any]} />
                     <lineBasicMaterial color="#fbbf24" transparent opacity={0.3} />
                 </lineSegments>
             )}

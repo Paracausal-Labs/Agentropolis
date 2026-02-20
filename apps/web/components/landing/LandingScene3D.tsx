@@ -3,10 +3,10 @@
 import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls, Stars, Sparkles, Grid, Icosahedron, Float } from '@react-three/drei'
 import { useRef } from 'react'
-import * as THREE from 'three'
+
 
 function CyberCore() {
-    const meshRef = useRef<THREE.Mesh>(null)
+    const meshRef = useRef<any>(null)
 
     useFrame((state) => {
         if (meshRef.current) {

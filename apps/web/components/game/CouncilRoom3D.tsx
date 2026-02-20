@@ -788,7 +788,7 @@ function WallTerminal({ position, rotation }: { position: [number, number, numbe
 }
 
 function CityHologram() {
-    const groupRef = useRef<THREE.Group>(null)
+    const groupRef = useRef<any>(null)
 
     // Fix hydration mismatch
     const buildings = useMemo(() => Array.from({ length: 15 }).map(() => ({
@@ -841,7 +841,7 @@ function CityHologram() {
 }
 
 function HologramPedestal({ position, color }: { position: [number, number, number], color: string }) {
-    const gemRef = useRef<THREE.Mesh>(null)
+    const gemRef = useRef<any>(null)
 
     useFrame((state) => {
         if (gemRef.current) {

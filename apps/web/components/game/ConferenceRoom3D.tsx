@@ -155,7 +155,7 @@ function ConferenceTable() {
 }
 
 function CityHologram() {
-    const groupRef = useRef<THREE.Group>(null)
+    const groupRef = useRef<any>(null)
 
     useFrame((state) => {
         if (groupRef.current) {
@@ -333,7 +333,7 @@ function WallTerminal({ position, rotation }: { position: [number, number, numbe
 }
 
 function HologramPedestal({ position, color }: { position: [number, number, number], color: string }) {
-    const gemRef = useRef<THREE.Mesh>(null)
+    const gemRef = useRef<any>(null)
 
     useFrame((state) => {
         if (gemRef.current) {

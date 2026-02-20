@@ -27,6 +27,9 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@agentropolis/shared": [
+        "../../packages/shared/dist"
       ]
     },
     "allowJs": true,

@@ -36,8 +36,8 @@ export function Agent3D({
     onPointerOver,
     onPointerOut,
 }: Agent3DProps) {
-    const groupRef = useRef<THREE.Group>(null)
-    const bodyRef = useRef<THREE.Mesh>(null)
+    const groupRef = useRef<any>(null)
+    const bodyRef = useRef<any>(null)
     const agent = AGENT_TYPES[agentType]
 
     const skinColors = useMemo(() => ({
@@ -93,7 +93,7 @@ export function Agent3D({
             default:
                 return <capsuleGeometry args={[0.3, 1, 4, 8]} />
         }
-    }, [agent?.shape])
+    }, [agent])
 
     if (!agent) {
         console.error(`Agent3D: Unknown agent type "${agentType}"`)
@@ -177,7 +177,7 @@ export function Agent3D({
 
 // Particle system for agent deployment effect
 export function DeploymentEffect({ position }: { position: [number, number, number] }) {
-    const particlesRef = useRef<THREE.Points>(null)
+    const particlesRef = useRef<any>(null)
 
     const particles = useMemo(() => {
         const geometry = new THREE.BufferGeometry()
@@ -212,7 +212,7 @@ export function DeploymentEffect({ position }: { position: [number, number, numb
 
     return (
         <points ref={particlesRef} position={position}>
-            <bufferGeometry attach="geometry" {...particles} />
+            <primitive object={particles} attach="geometry" />
             <pointsMaterial
                 attach="material"
                 color={COLORS.neon.cyan}
@@ -226,7 +226,7 @@ export function DeploymentEffect({ position }: { position: [number, number, numb
 }
 
 export function Coin3D({ position, type = 'gold', isCollected }: { position: [number, number, number], type: 'bronze' | 'silver' | 'gold', isCollected: boolean }) {
-    const meshRef = useRef<THREE.Group>(null)
+    const meshRef = useRef<any>(null)
 
     const color = type === 'gold' ? COLORS.neon.yellow : type === 'silver' ? '#cccccc' : '#cd7f32'
 
@@ -254,7 +254,7 @@ export function Coin3D({ position, type = 'gold', isCollected }: { position: [nu
 }
 
 export function FloatingText({ position, text, color = '#FCEE0A', onComplete }: { position: [number, number, number], text: string, color?: string, onComplete?: () => void }) {
-    const ref = useRef<THREE.Group>(null)
+    const ref = useRef<any>(null)
 
     useFrame(() => {
         if (ref.current) {
@@ -299,8 +299,8 @@ export function BattleAgent3D({
     hp,
     maxHp
 }: BattleAgent3DProps) {
-    const groupRef = useRef<THREE.Group>(null)
-    const bodyRef = useRef<THREE.Mesh>(null)
+    const groupRef = useRef<any>(null)
+    const bodyRef = useRef<any>(null)
     const attackTime = useRef(0)
     const agent = AGENT_TYPES[agentType]
 
@@ -370,7 +370,7 @@ export function BattleAgent3D({
             default:
                 return <capsuleGeometry args={[0.4, 1.5, 4, 8]} />
         }
-    }, [agent?.shape])
+    }, [agent])
 
     return (
         <group ref={groupRef} position={position}>
@@ -438,7 +438,7 @@ export function BattleAgent3D({
 
 // Attack effect burst
 export function AttackBurst({ position, color = '#FCEE0A' }: { position: [number, number, number], color?: string }) {
-    const ref = useRef<THREE.Group>(null)
+    const ref = useRef<any>(null)
     const scaleRef = useRef(0.1)
 
     useFrame((_, delta) => {
@@ -449,7 +449,7 @@ export function AttackBurst({ position, color = '#FCEE0A' }: { position: [number
 
             // Fade out
             const opacity = Math.max(0, 1 - scaleRef.current / 3)
-            ref.current.children.forEach(child => {
+            ref.current.children.forEach((child: any) => {
                 if ((child as THREE.Mesh).material) {
                     const mat = (child as THREE.Mesh).material as THREE.MeshBasicMaterial
                     mat.opacity = opacity
