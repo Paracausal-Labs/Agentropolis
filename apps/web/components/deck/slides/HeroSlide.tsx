@@ -20,7 +20,7 @@ export function HeroSlide() {
                 >
                     <span className="w-2 h-2 rounded-full bg-[#FCEE0A] animate-pulse" />
                     <span className="text-[#FCEE0A] text-xs font-mono uppercase tracking-[0.4em]">
-                        Built for Yellow Track · HackMoney 2026 Winner
+                        HackMoney 2026: 1st Place (Yellow) · ENS Prize
                     </span>
                 </motion.div>
 
@@ -34,28 +34,44 @@ export function HeroSlide() {
 
                 <motion.p
                     variants={itemVariants}
-                    className="text-lg md:text-2xl text-gray-400 tracking-wide font-medium mt-6 max-w-2xl"
+                    className="text-lg md:text-2xl text-gray-400 font-medium mt-6 max-w-3xl"
                 >
-                    AI-agent city builder{' '}
-                    <span className="text-[#FCEE0A]">+</span> on-chain economy powered by{' '}
-                    <span className="text-[#FCEE0A]">Yellow state channels</span>
+                    The Arena for AI Trading Agents, Settled on <span className="text-[#FCEE0A]">Yellow</span>
+                </motion.p>
+
+                <motion.p
+                    variants={itemVariants}
+                    className="text-base md:text-lg text-gray-500 mt-6 max-w-2xl border-l-2 border-[#FCEE0A]/50 pl-4 text-left mx-auto"
+                >
+                    Agentropolis is a consumer AI trading platform where any agent can register, trade real tokens on Base via Uniswap V4, compete in paid tournaments, and sell proven strategies on a marketplace.
+                    The city layer makes the experience engaging for non-crypto users, but the core product is trading infrastructure. Every high-frequency user action settles through Yellow.
                 </motion.p>
 
                 <motion.div
                     variants={itemVariants}
-                    className="flex gap-6 mt-14 text-xs font-mono text-gray-600 uppercase tracking-widest"
+                    className="flex flex-wrap justify-center gap-4 mt-10 text-xs font-mono text-gray-400 tracking-widest uppercase"
                 >
-                    <span>
-                        <span className="text-[#FCEE0A]">CHAIN:</span> BASE SEPOLIA
-                    </span>
-                    <span className="text-[#FCEE0A]/40">|</span>
-                    <span>
-                        <span className="text-[#FCEE0A]">SETTLEMENT:</span> YELLOW
-                    </span>
-                    <span className="text-[#FCEE0A]/40">|</span>
-                    <span>
-                        <span className="text-[#FCEE0A]">AI:</span> LLAMA-3 / GROQ
-                    </span>
+                    <div className="border border-white/10 bg-black/40 px-4 py-2 flex items-center gap-2">
+                        <span className="text-[#00F0FF]">Core</span>
+                        <span>Trading / Marketplace / AI Agents / NFTs</span>
+                    </div>
+                    <div className="border border-[#FCEE0A]/30 bg-[#FCEE0A]/5 px-4 py-2 flex items-center gap-2">
+                        <span className="text-[#FCEE0A]">Settlement</span>
+                        <span>Yellow State Channels</span>
+                    </div>
+                </motion.div>
+
+                <motion.div
+                    variants={itemVariants}
+                    className="flex flex-wrap justify-center gap-4 mt-4 text-xs font-mono text-gray-400 tracking-widest uppercase"
+                >
+                    <div className="border border-white/10 bg-white/5 px-4 py-2 flex items-center gap-2">
+                        <span className="text-[#FF00FF]">Status</span>
+                        <span>Prototype Shipped with V4 hooks & Yellow</span>
+                    </div>
+                    <div className="border border-white/10 bg-white/5 px-4 py-2 flex items-center gap-2 text-white font-bold">
+                        <span>90-Day Production Plan</span>
+                    </div>
                 </motion.div>
 
                 {/* scroll hint */}
@@ -63,7 +79,7 @@ export function HeroSlide() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 0.4, y: [0, 10, 0] }}
                     transition={{ delay: 2, duration: 2, repeat: Infinity }}
-                    className="absolute bottom-[-8rem] left-1/2 -translate-x-1/2 flex flex-col items-center gap-2"
+                    className="absolute bottom-[-6rem] left-1/2 -translate-x-1/2 flex flex-col items-center gap-2"
                 >
                     <span className="text-xs font-mono uppercase tracking-widest text-gray-500">Scroll</span>
                     <ArrowDown className="w-4 h-4 text-[#FCEE0A]" />

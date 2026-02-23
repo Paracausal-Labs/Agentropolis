@@ -3,22 +3,26 @@
 import dynamic from 'next/dynamic'
 import { DeckNavigation } from '@/components/deck/DeckNavigation'
 import { HeroSlide } from '@/components/deck/slides/HeroSlide'
-import { SummarySlide } from '@/components/deck/slides/SummarySlide'
-import { ProblemSlide } from '@/components/deck/slides/ProblemSlide'
-import { InsightSlide } from '@/components/deck/slides/InsightSlide'
-import { ShippedSlide } from '@/components/deck/slides/ShippedSlide'
-import { VisionSlide } from '@/components/deck/slides/VisionSlide'
-import { GameLoopsSlide } from '@/components/deck/slides/GameLoopsSlide'
-import { RoadmapSlide } from '@/components/deck/slides/RoadmapSlide'
+import { WhyNowSlide } from '@/components/deck/slides/WhyNowSlide'
+import { ProductOverviewSlide } from '@/components/deck/slides/ProductOverviewSlide'
+import { WhyYellowSlide } from '@/components/deck/slides/WhyYellowSlide'
 import { ArchitectureSlide } from '@/components/deck/slides/ArchitectureSlide'
+import { TransactionLoopsSlide } from '@/components/deck/slides/TransactionLoopsSlide'
+import { EconomicsSlide } from '@/components/deck/slides/EconomicsSlide'
+import { RevenueModelSlide } from '@/components/deck/slides/RevenueModelSlide'
 import { GtmSlide } from '@/components/deck/slides/GtmSlide'
+import { CampusWedgeSlide } from '@/components/deck/slides/CampusWedgeSlide'
+import { RoadmapSlide } from '@/components/deck/slides/RoadmapSlide'
+import { ShippedSlide } from '@/components/deck/slides/ShippedSlide'
 import { AskSlide } from '@/components/deck/slides/AskSlide'
+import { PartnershipAskSlide } from '@/components/deck/slides/PartnershipAskSlide'
+import { FooterSlide } from '@/components/deck/slides/FooterSlide'
 
 const DeckBackground = dynamic(() => import('@/components/deck/DeckBackground'), { ssr: false })
 
 export default function DeckPage() {
     return (
-        <main className="relative bg-[#050510] text-white font-[Rajdhani] overflow-x-hidden">
+        <main className="deck-theme relative overflow-x-hidden">
             {/* 3D Background */}
             <DeckBackground />
 
@@ -31,16 +35,20 @@ export default function DeckPage() {
 
             {/* Slides Sequence */}
             <HeroSlide />
-            <SummarySlide />
-            <ProblemSlide />
-            <InsightSlide />
-            <ShippedSlide />
-            <VisionSlide />
-            <GameLoopsSlide />
-            <RoadmapSlide />
+            <WhyNowSlide />
+            <ProductOverviewSlide />
+            <WhyYellowSlide />
             <ArchitectureSlide />
+            <TransactionLoopsSlide />
+            <EconomicsSlide />
+            <RevenueModelSlide />
             <GtmSlide />
+            <CampusWedgeSlide />
+            <RoadmapSlide />
+            <ShippedSlide />
             <AskSlide />
+            <PartnershipAskSlide />
+            <FooterSlide />
         </main>
     )
 }

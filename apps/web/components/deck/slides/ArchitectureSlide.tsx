@@ -2,30 +2,35 @@
 
 import { motion } from 'framer-motion'
 import { MotionSlide, itemVariants, containerVariants } from '../MotionSlide'
-import { ArrowDown } from 'lucide-react'
+import { MermaidDiagram } from '../MermaidDiagram'
 
-// Helper components
-function ArchBox({ label, sub, color }: { label: string, sub: string, color: string }) {
-    return (
-        <motion.div
-            variants={itemVariants}
-            className={`border ${color} bg-black/60 backdrop-blur-md p-4 text-center clip-corner-tr hover:bg-black/80 transition-colors cursor-default`}
-        >
-            <div className="text-sm md:text-base font-bold uppercase tracking-wider text-white">
-                {label}
-            </div>
-            <div className="text-xs text-gray-500 mt-1">{sub}</div>
-        </motion.div>
-    )
-}
+const architectureChart = `
+flowchart TB
+    U[Users and Agent Builders] --> FE[Agentropolis Web App]
+    U --> API[Agent API REST and WS]
 
-function Arrow() {
-    return (
-        <motion.div variants={itemVariants} className="flex justify-center items-center py-2">
-            <ArrowDown className="text-[#FCEE0A]/40 w-6 h-6 animate-bounce" />
-        </motion.div>
-    )
-}
+    FE --> APP[Application Layer]
+    API --> APP
+
+    APP --> RISK[Risk Engine and Policy]
+    APP --> PERF[Performance Oracle and Indexer]
+    APP --> TOURN[Tournament Engine]
+    APP --> MKT[Marketplace Service]
+    APP --> COUNCIL[Default AI Council]
+
+    APP --> YELLOW[Yellow Clearnode]
+    YELLOW --> UB[Unified Balance]
+    YELLOW --> CH[Payment Channels]
+    YELLOW --> SESS[App Sessions]
+
+    APP --> BASE[Base Mainnet]
+    BASE --> V4[Uniswap V4 Pools and Hooks]
+    BASE --> REG[AgentRegistry and NFTs]
+    BASE --> T[ Tournament Contract ]
+
+    PERF --> DASH[Leaderboards and City State]
+    DASH --> FE
+`
 
 export function ArchitectureSlide() {
     return (
@@ -34,31 +39,40 @@ export function ArchitectureSlide() {
                 variants={containerVariants}
                 initial="hidden"
                 whileInView="visible"
-                viewport={{ once: true, amount: 0.3 }}
-                className="relative z-20 w-full max-w-3xl mx-auto"
+                viewport={{ once: true, amount: 0.1 }}
+                className="relative z-20 w-full max-w-6xl mx-auto"
             >
-                <div className="text-center mb-14">
-                    <motion.div variants={itemVariants} className="inline-block border border-[#FCEE0A] text-[#FCEE0A] text-xs font-mono uppercase tracking-[0.3em] px-4 py-1 mb-6">
+                <div className="text-center mb-10">
+                    <motion.div variants={itemVariants} className="inline-block border border-[#FCEE0A] text-[#FCEE0A] text-xs font-mono uppercase tracking-[0.3em] px-4 py-1 mb-4">
                         Architecture
                     </motion.div>
-                    <motion.h2 variants={itemVariants} className="text-4xl md:text-6xl font-black uppercase tracking-tight text-white mb-6 leading-none">
-                        The <span className="text-[#FCEE0A]">System</span> Diagram
+                    <motion.h2 variants={itemVariants} className="text-4xl md:text-5xl font-black uppercase tracking-tight text-white mb-2 leading-none">
+                        System Architecture
                     </motion.h2>
+                    <motion.p variants={itemVariants} className="text-lg text-gray-400 font-medium">
+                        Consumer AI trading stack with Yellow as the transaction and session layer
+                    </motion.p>
                 </div>
 
-                <div className="space-y-2">
-                    <ArchBox label="Client (Web / Mobile)" sub="React Three Fiber · Next.js 14" color="border-[#FCEE0A]/50" />
-                    <Arrow />
-                    <ArchBox label="Yellow Channel Layer" sub="Nitrolite SDK · Off-chain micro-actions · P2P state" color="border-[#FCEE0A]" />
-                    <Arrow />
-                    <div className="grid grid-cols-2 gap-4">
-                        <ArchBox label="AI Orchestrator" sub="Llama-3 · Agent personalities" color="border-[#00F0FF]/50" />
-                        <ArchBox label="Backend Sim" sub="Matchmaking · Session mgmt" color="border-[#00F0FF]/30" />
-                    </div>
-                    <Arrow />
-                    <div className="grid grid-cols-2 gap-4">
-                        <ArchBox label="On-Chain Settlement" sub="Yellow contracts · Uniswap v4" color="border-[#FF00FF]/40" />
-                        <ArchBox label="Registry & Identity" sub="ENS names · ERC-8004" color="border-[#FF00FF]/40" />
+                <div className="relative">
+                    <motion.div variants={itemVariants} className="w-full">
+                        <MermaidDiagram chart={architectureChart} id="architecture" />
+                    </motion.div>
+
+                    {/* Desktop Callouts - Hidden on mobile for cleaner layout */}
+                    <div className="hidden lg:block">
+                        <motion.div variants={itemVariants} className="absolute -left-32 top-10 border-l-2 border-[#00F0FF] pl-4 text-xs font-mono tracking-widest uppercase text-gray-400 w-48 bg-black/40 p-2">
+                            Frontend and <br /><span className="text-[#00F0FF]">Agent API</span>
+                        </motion.div>
+                        <motion.div variants={itemVariants} className="absolute -right-32 top-32 border-r-2 border-[#FF00FF] pr-4 text-right text-xs font-mono tracking-widest uppercase text-gray-400 w-48 bg-black/40 p-2">
+                            <span className="text-[#FF00FF]">Application services</span> <br /><span className="lowercase text-[10px]">(risk, oracle, tournaments, marketplace)</span>
+                        </motion.div>
+                        <motion.div variants={itemVariants} className="absolute -left-32 bottom-32 border-l-2 border-[#FCEE0A] pl-4 text-xs font-mono tracking-widest uppercase text-gray-400 w-48 bg-black/40 p-2">
+                            Yellow <span className="text-[#FCEE0A]">Clearnode</span> <br /><span className="lowercase text-[10px]">(Unified Balance, Channels, App Sessions)</span>
+                        </motion.div>
+                        <motion.div variants={itemVariants} className="absolute -right-32 bottom-10 border-r-2 border-white pr-4 text-right text-xs font-mono tracking-widest uppercase text-gray-400 w-48 bg-black/40 p-2">
+                            <span className="text-white">Base mainnet</span> <br /><span className="lowercase text-[10px]">(V4 hooks, registry, NFTs, tournaments)</span>
+                        </motion.div>
                     </div>
                 </div>
             </motion.div>

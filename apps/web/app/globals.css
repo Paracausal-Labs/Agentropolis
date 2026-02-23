@@ -26,7 +26,7 @@
     width: 100%;
   }
 
-  body {
+  .deck-theme {
     @apply bg-[#050510] text-white;
     font-family: var(--font-rajdhani), sans-serif;
     background-image:
@@ -34,6 +34,7 @@
       linear-gradient(0deg, transparent 24%, rgba(252, 238, 10, 0.03) 25%, rgba(252, 238, 10, 0.03) 26%, transparent 27%, transparent 74%, rgba(252, 238, 10, 0.03) 75%, rgba(252, 238, 10, 0.03) 76%, transparent 77%, transparent),
       linear-gradient(90deg, transparent 24%, rgba(252, 238, 10, 0.03) 25%, rgba(252, 238, 10, 0.03) 26%, transparent 27%, transparent 74%, rgba(252, 238, 10, 0.03) 75%, rgba(252, 238, 10, 0.03) 76%, transparent 77%, transparent);
     background-size: 100% 100%, 50px 50px, 50px 50px;
+    min-height: 100vh;
   }
 }
 
@@ -80,6 +81,7 @@
   /* Glitch Text Effect */
   .text-glitch {
     @apply relative inline-block;
+    font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
     text-shadow: 2px 0 #FF00FF, -2px 0 #00F0FF;
   }
 

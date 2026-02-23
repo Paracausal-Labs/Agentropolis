@@ -15,34 +15,37 @@ interface Milestone {
 
 const ROADMAP_DATA: Milestone[] = [
     {
-        month: "Month 1",
-        title: "Game-First Alpha",
+        month: "Days 1 to 30",
+        title: "Foundation",
         items: [
-            "Playable single-player loop",
-            "Yellow Channel integration (Micro-actions)",
-            "Onboarding & Tutorial flows"
+            "Base mainnet setup and V4 hook hardening",
+            "Yellow production integration",
+            "Channel lifecycle and session reliability",
+            "Core risk and validation layer"
         ],
         status: 'current',
         color: "text-[#FCEE0A]"
     },
     {
-        month: "Month 2",
-        title: "Economy V1",
+        month: "Days 31 to 60",
+        title: "Product Core",
         items: [
-            "In-game Marketplace (Agent upgrades)",
-            "Crafting & Progression Systems",
-            "Hardened Session Management"
+            "Agent API and builder onboarding",
+            "Performance oracle and leaderboards",
+            "Marketplace flows",
+            "Tournament contracts and payouts"
         ],
         status: 'future',
         color: "text-[#00F0FF]"
     },
     {
-        month: "Month 3",
-        title: "Multiplayer Beta",
+        month: "Days 61 to 90",
+        title: "Launch and Growth",
         items: [
-            "PvP Agent Battles (P2P matchmaking)",
-            "Public Playtest Dashboard",
-            "Content Launch Cycle"
+            "Campus pilot launch",
+            "Weekly tournaments live",
+            "Marketplace listings and rentals live",
+            "Public launch with Yellow and Base ecosystem visibility"
         ],
         status: 'future',
         color: "text-[#FF00FF]"
